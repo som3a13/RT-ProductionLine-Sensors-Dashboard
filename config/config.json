@@ -1,0 +1,111 @@
+{
+  "sensors": [
+    {
+      "name": "Temperature Sensor 1",
+      "id": 1,
+      "low_limit": 20.0,
+      "high_limit": 80.0,
+      "unit": "°C",
+      "protocol": "serial",
+      "protocol_config": {
+        "port": "/dev/pts/7",
+        "baudrate": 115200,
+        "bytesize": 8,
+        "parity": "N",
+        "stopbits": 1
+      }
+    },
+    {
+      "name": "Pressure Sensor 1",
+      "id": 2,
+      "low_limit": 50.0,
+      "high_limit": 150.0,
+      "unit": "PSI",
+      "protocol": "serial",
+      "protocol_config": {
+        "port": "/dev/pts/9",
+        "baudrate": 115200,
+        "bytesize": 8,
+        "parity": "N",
+        "stopbits": 1
+      }
+    },
+    {
+      "name": "Flow Rate Sensor 1",
+      "id": 3,
+      "low_limit": 10.0,
+      "high_limit": 100.0,
+      "unit": "L/min",
+      "protocol": "tcp",
+      "protocol_config": {
+        "host": "localhost",
+        "port": 5000
+      }
+    },
+    {
+      "name": "Flow Rate Sensor 2",
+      "id": 6,
+      "low_limit": 10.0,
+      "high_limit": 100.0,
+      "unit": "L/min",
+      "protocol": "tcp",
+      "protocol_config": {
+        "host": "localhost",
+        "port": 5001
+      }
+    },
+    {
+      "name": "Vibration Sensor 1",
+      "id": 4,
+      "low_limit": 0.0,
+      "high_limit": 5.0,
+      "unit": "mm/s",
+      "protocol": "tcp",
+      "protocol_config": {
+        "host": "localhost",
+        "port": 5000
+      }
+    },
+    {
+      "name": "Voltage Sensor 1",
+      "id": 5,
+      "low_limit": 200.0,
+      "high_limit": 240.0,
+      "unit": "V",
+      "protocol": "modbus",
+      "protocol_config": {
+        "host": "localhost",
+        "port": 1502,
+        "unit_id": 1,
+        "register": 0
+      }
+    }
+  ],
+  "update_rate": 0.5,
+  "alarm_settings": {
+    "enable_notifications": true,
+    "enable_desktop_notifications": true,
+    "webhook_url": "http://localhost:3000/webhook"
+  },
+  "remote_console": {
+    "enabled": true,
+    "host": "localhost",
+    "port": 8765,
+    "http_port": 8080,
+    "users": {
+      "admin": {
+        "password": "admin123",
+        "permissions": ["read", "write", "commands"]
+      },
+      "operator": {
+        "password": "operator123",
+        "permissions": ["read"]
+      },
+      "viewer": {
+        "password": "viewer123",
+        "permissions": ["read"]
+      }
+    }
+  }
+}
+

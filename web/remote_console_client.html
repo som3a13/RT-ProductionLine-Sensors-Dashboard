@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Remote Maintenance Console</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 20px;
+        background-color: #f5f5f5;
+      }
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+      h1 {
+        color: #333;
+      }
+      .auth-section {
+        margin-bottom: 20px;
+        padding: 15px;
+        background: #f9f9f9;
+        border-radius: 4px;
+      }
+      .status {
+        padding: 10px;
+        margin: 10px 0;
+        border-radius: 4px;
+      }
+      .status.connected {
+        background: #d4edda;
+        color: #155724;
+      }
+      .status.disconnected {
+        background: #f8d7da;
+        color: #721c24;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 20px 0;
+      }
+      th,
+      td {
+        padding: 12px;
+        text-align: left;
+        border-bottom: 1px solid #ddd;
+      }
+      th {
+        background-color: #4caf50;
+        color: white;
+      }
+      tr:hover {
+        background-color: #f5f5f5;
+      }
+      .alarm {
+        background-color: #ffebee;
+      }
+      button {
+        padding: 10px 20px;
+        margin: 5px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        background-color: #4caf50;
+        color: white;
+      }
+      button:hover {
+        background-color: #45a049;
+      }
+      button:disabled {
+        background-color: #cccccc;
+        cursor: not-allowed;
+      }
+      input {
+        padding: 8px;
+        margin: 5px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+      }
+      .log-viewer {
+        height: 300px;
+        overflow-y: auto;
+        border: 1px solid #ddd;
+        padding: 10px;
+        background: #f9f9f9;
+        font-family: monospace;
+        font-size: 12px;
+      }
+      .log-entry {
+        margin: 5px 0;
+        padding: 5px;
+      }
+      .log-entry.alarm {
+        color: #d32f2f;
+      }
+      .log-entry.info {
+        color: #1976d2;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Si-Ware Remote Maintenance Console</h1>
+
+      <div class="auth-section">
+        <h3>Authentication</h3>
+        <input type="text" id="username" placeholder="Username" value="admin" />
+        <input
+          type="password"
+          id="password"
+          placeholder="Password"
+          value="admin123"
+        />
+        <button onclick="connect()">Connect</button>
+        <button onclick="disconnect()">Disconnect</button>
+        <div id="connectionStatus" class="status disconnected">
+          Disconnected
+        </div>
+      </div>
+
+      <div id="mainContent" style="display: none">
+        <h3>System Status</h3>
+        <div id="systemStatus"></div>
+
+        <h3>Commands</h3>
+        <button onclick="clearAlarms()">Clear Alarms</button>
+        <button onclick="runSelfTest()">Run Self-Test</button>
+        <button onclick="getSnapshot()">Get Snapshot</button>
+
+        <h3>Live Sensor Data</h3>
+        <table id="sensorsTable">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Name</th>
+              <th>Value</th>
+              <th>Status</th>
+              <th>Timestamp</th>
+            </tr>
+          </thead>
+          <tbody id="sensorsBody"></tbody>
+        </table>
+
+        <h3>Alarm Log</h3>
+        <table id="alarmsTable">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Sensor</th>
+              <th>Value</th>
+              <th>Type</th>
+            </tr>
+          </thead>
+          <tbody id="alarmsBody"></tbody>
+        </table>
+
+        <h3>Live Log Viewer</h3>
+        <div id="logViewer" class="log-viewer"></div>
+      </div>
+    </div>
+
+    <script>
+      let ws = null;
+      let reconnectInterval = null;
+
+      function connect() {
+        const username = document.getElementById("username").value;
+        const password = document.getElementById("password").value;
+        // WebSocket URL is injected dynamically from config.json by the server
+        const wsUrl = "ws://localhost:8765"; // This will be replaced by server
+
+        ws = new WebSocket(wsUrl);
+
+        ws.onopen = function () {
+          updateStatus("Connecting...", "disconnected");
+          // Send authentication
+          ws.send(
+            JSON.stringify({
+              type: "auth",
+              username: username,
+              password: password,
+            })
+          );
+        };
+
+        ws.onmessage = function (event) {
+          try {
+            const data = JSON.parse(event.data);
+
+            if (data.type === "welcome") {
+              addLogEntry("Connected to server", "info");
+            } else if (data.type === "auth_success") {
+              updateStatus("Connected as " + data.role, "connected");
+              document.getElementById("mainContent").style.display = "block";
+              addLogEntry("Authenticated as " + data.role, "info");
+              getStatus();
+              getSensors();
+            } else if (data.type === "auth_failure") {
+              updateStatus("Authentication failed", "disconnected");
+              addLogEntry("Authentication failed: " + data.message, "alarm");
+              alert("Authentication failed: " + data.message);
+            } else if (data.type === "sensor_update") {
+              updateSensorTable(data.sensor);
+            } else if (data.type === "alarm") {
+              addAlarmToTable(data.alarm);
+              addLogEntry(
+                "ALARM: " +
+                  data.alarm.sensor_name +
+                  " - " +
+                  data.alarm.alarm_type,
+                "alarm"
+              );
+            } else if (data.type === "status") {
+              document.getElementById("systemStatus").innerHTML = `Sensors: ${
+                data.sensor_count
+              } | Alarms: ${data.alarm_count} | Time: ${new Date(
+                data.timestamp
+              ).toLocaleString()}`;
+            } else if (data.type === "sensors") {
+              updateSensorsTable(data.sensors);
+            } else if (data.type === "alarms") {
+              updateAlarmsTable(data.alarms);
+            } else if (data.type === "logs") {
+              updateLogViewer(data.logs);
+            } else if (data.type === "success") {
+              addLogEntry(data.message || "Command successful", "info");
+              if (data.status) {
+                addLogEntry(`Simulator ${data.status.sensor_id}: Running=${data.status.running}, PID=${data.status.pid || 'N/A'}`, "info");
+              }
+              // If alarms were cleared, update the alarms table
+              if (data.alarms !== undefined) {
+                updateAlarmsTable(data.alarms);
+              }
+            } else if (data.type === "error") {
+              addLogEntry("Error: " + data.message, "alarm");
+            } else if (data.type === "self_test") {
+              displaySelfTestResults(data.results);
+            } else if (data.type === "snapshot") {
+              displaySnapshot(data.snapshot);
+            }
+          } catch (e) {
+            console.error("Error parsing message:", e, event.data);
+          }
+        };
+
+        ws.onerror = function (error) {
+          updateStatus("Connection error", "disconnected");
+          console.error("WebSocket error:", error);
+          addLogEntry("Connection error occurred", "alarm");
+        };
+
+        ws.onclose = function () {
+          updateStatus("Disconnected", "disconnected");
+          document.getElementById("mainContent").style.display = "none";
+        };
+      }
+
+      function disconnect() {
+        if (ws) {
+          ws.close();
+          ws = null;
+        }
+      }
+
+      function updateStatus(message, className) {
+        const statusEl = document.getElementById("connectionStatus");
+        statusEl.textContent = message;
+        statusEl.className = "status " + className;
+      }
+
+      function sendCommand(command, data = {}) {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(
+            JSON.stringify({
+              type: "command",
+              command: command,
+              data: data,
+            })
+          );
+        } else {
+          alert("Not connected");
+        }
+      }
+
+      function getStatus() {
+        sendCommand("get_status");
+      }
+
+      function getSensors() {
+        sendCommand("get_sensors");
+      }
+
+      function getAlarms() {
+        sendCommand("get_alarms", { limit: 100 });
+      }
+
+      function getLogs() {
+        sendCommand("get_logs", { limit: 50 });
+      }
+
+      function clearAlarms() {
+        if (confirm("Clear all alarms?")) {
+          sendCommand("clear_alarms");
+          // Refresh alarms after clearing (with a small delay to ensure server processed it)
+          setTimeout(function() {
+            getAlarms();
+            getStatus(); // Also refresh status to update alarm count
+          }, 100);
+        }
+      }
+
+      function runSelfTest() {
+        sendCommand("run_self_test");
+        addLogEntry("Running self-test...", "info");
+      }
+
+      function getSnapshot() {
+        sendCommand("get_snapshot");
+        addLogEntry("Requesting system snapshot...", "info");
+      }
+
+      function displaySelfTestResults(results) {
+        let message = `Self-Test Results:\n`;
+        message += `Overall Status: ${results.overall_status}\n`;
+        message += `Total Tests: ${results.total_tests}\n`;
+        message += `Passed: ${results.passed}, Failed: ${results.failed}, Warnings: ${results.warnings}\n\n`;
+        message += `Test Details:\n`;
+        results.tests.forEach(test => {
+          message += `  ${test.name}: ${test.status} - ${test.details}\n`;
+        });
+        addLogEntry(message, results.overall_status === "PASS" ? "info" : "alarm");
+        console.log("Self-Test Results:", results);
+      }
+
+      function displaySnapshot(snapshot) {
+        let message = `System Snapshot:\n`;
+        message += `Timestamp: ${snapshot.timestamp}\n`;
+        message += `Sensors: ${snapshot.system_status.sensor_count}\n`;
+        message += `Alarms: ${snapshot.system_status.alarm_count}\n`;
+        message += `Connected Clients: ${snapshot.system_status.connected_clients}\n\n`;
+        message += `Health Summary:\n`;
+        message += `  Healthy: ${snapshot.health_summary.healthy}\n`;
+        message += `  Alarms: ${snapshot.health_summary.alarms}\n`;
+        message += `  Faulty: ${snapshot.health_summary.faulty}\n`;
+        message += `  Total: ${snapshot.health_summary.total}\n\n`;
+        message += `Sensors:\n`;
+        snapshot.sensors.forEach(sensor => {
+          message += `  ${sensor.name}: ${sensor.value} ${sensor.unit} (${sensor.status})\n`;
+        });
+        if (snapshot.recent_alarms.length > 0) {
+          message += `\nRecent Alarms:\n`;
+          snapshot.recent_alarms.forEach(alarm => {
+            message += `  ${alarm.sensor_name}: ${alarm.alarm_type} - ${alarm.value} ${alarm.unit}\n`;
+          });
+        }
+        addLogEntry(message, "info");
+        console.log("System Snapshot:", snapshot);
+      }
+
+      function updateSensorTable(sensor) {
+        const tbody = document.getElementById("sensorsBody");
+        let row = document.getElementById("sensor_" + sensor.id);
+
+        if (!row) {
+          row = tbody.insertRow();
+          row.id = "sensor_" + sensor.id;
+        }
+
+        row.innerHTML = `
+                <td>${sensor.id}</td>
+                <td>${sensor.name}</td>
+                <td>${sensor.value.toFixed(2)} ${sensor.unit}</td>
+                <td>${sensor.status}</td>
+                <td>${new Date(sensor.timestamp).toLocaleTimeString()}</td>
+            `;
+
+        if (
+          sensor.status.includes("Alarm") ||
+          sensor.status === "Faulty Sensor"
+        ) {
+          row.className = "alarm";
+        } else {
+          row.className = "";
+        }
+      }
+
+      function updateSensorsTable(sensors) {
+        const tbody = document.getElementById("sensorsBody");
+        tbody.innerHTML = "";
+        sensors.forEach((sensor) => updateSensorTable(sensor));
+      }
+
+      function addAlarmToTable(alarm) {
+        const tbody = document.getElementById("alarmsBody");
+        const row = tbody.insertRow(0);
+        row.className = "alarm";
+        row.innerHTML = `
+                <td>${new Date(alarm.timestamp).toLocaleString()}</td>
+                <td>${alarm.sensor_name}</td>
+                <td>${alarm.value.toFixed(2)} ${alarm.unit}</td>
+                <td>${alarm.alarm_type}</td>
+            `;
+      }
+
+      function updateAlarmsTable(alarms) {
+        const tbody = document.getElementById("alarmsBody");
+        tbody.innerHTML = "";
+        alarms.forEach((alarm) => addAlarmToTable(alarm));
+      }
+
+      function addLogEntry(message, type = "info") {
+        const viewer = document.getElementById("logViewer");
+        const entry = document.createElement("div");
+        entry.className = "log-entry " + type;
+        entry.textContent = new Date().toLocaleTimeString() + " - " + message;
+        viewer.insertBefore(entry, viewer.firstChild);
+
+        // Keep only last 100 entries
+        while (viewer.children.length > 100) {
+          viewer.removeChild(viewer.lastChild);
+        }
+      }
+
+      function updateLogViewer(logs) {
+        const viewer = document.getElementById("logViewer");
+        viewer.innerHTML = "";
+        logs.reverse().forEach((log) => {
+          addLogEntry(log.message, log.level.toLowerCase());
+        });
+      }
+    </script>
+  </body>
+</html>
