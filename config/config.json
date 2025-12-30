@@ -8,7 +8,7 @@
       "unit": "°C",
       "protocol": "serial",
       "protocol_config": {
-        "port": "/dev/pts/7",
+        "port": "/dev/pts/2",
         "baudrate": 115200,
         "bytesize": 8,
         "parity": "N",
@@ -23,7 +23,7 @@
       "unit": "PSI",
       "protocol": "serial",
       "protocol_config": {
-        "port": "/dev/pts/9",
+        "port": "/dev/pts/4",
         "baudrate": 115200,
         "bytesize": 8,
         "parity": "N",

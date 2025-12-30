@@ -6,12 +6,11 @@ Clean, individual simulator files for each sensor. Each sensor has its own file 
 
 ```
 simulators/
-├── sensor_1.py          # Temperature Sensor (Serial/PTY)
-├── sensor_2.py          # Pressure Sensor (Serial/PTY)
-├── sensor_3.py          # Flow Rate Sensor (TCP) - Legacy, use tcp_sensor_server.py
-├── sensor_4.py          # Vibration Sensor (TCP) - Legacy, use tcp_sensor_server.py
-├── tcp_sensor_server.py # Unified TCP Server (Sensor 3 & 4)
-└── sensor_5.py          # Voltage Sensor (Modbus/TCP)
+├── sensor_serial.py        # Unified Serial Sensor Simulator (PTY) - Supports all sensor types
+├── start_tcp_system.py      # TCP Sensor System Launcher (unified TCP sensors)
+├── run_tcp_sensor_clients.py # TCP Sensor Clients (GenericTCPSensorClient)
+├── tcp_sensor_server.py     # Unified TCP Server
+└── sensor_modbus.py         # Unified Modbus Sensor Simulator - Supports all sensor types
 ```
 
 ## Quick Start
@@ -19,19 +18,21 @@ simulators/
 ### Run Individual Sensors
 
 ```bash
-# Serial sensors (PTY)
-python3 simulators/sensor_1.py --baudrate 115200 --bytesize 8 --parity N --stopbits 1
-python3 simulators/sensor_2.py --baudrate 115200 --bytesize 8 --parity N --stopbits 1
+# Serial sensors (PTY) - Unified simulator for all sensor types
+python3 simulators/sensor_serial.py --sensor-id 1 --sensor-type temperature
+python3 simulators/sensor_serial.py --sensor-id 2 --sensor-type pressure
+python3 simulators/sensor_serial.py --sensor-id 1 --sensor-type temperature --low-limit 20.0 --high-limit 80.0
 
-# Step 1: Start TCP Server (required first)
+# TCP Sensors - Use unified system launcher
+python3 simulators/start_tcp_system.py --server-ports 5000 --sensor flow:3:localhost:5000 --sensor vibration:4:localhost:5000
+
+# Or start server and clients separately:
 python3 simulators/tcp_sensor_server.py --host localhost --port 5000
+# Then use run_tcp_sensor_clients.py or start_tcp_system.py for clients
 
-# Step 2: Start Sensor Clients (can be started independently)
-python3 simulators/sensor_3_client.py --server-host localhost --server-port 5000
-python3 simulators/sensor_4_client.py --server-host localhost --server-port 5000
-
-# Modbus sensor
-python3 simulators/sensor_5.py --host localhost --port 1502 --unit-id 1 --register 0
+# Modbus sensors - Unified simulator for all sensor types
+python3 simulators/sensor_modbus.py --sensor-id 5 --sensor-type voltage
+python3 simulators/sensor_modbus.py --sensor-id 6 --sensor-type temperature --host localhost --port 1503 --unit-id 2
 ```
 
 ### Run All Sensors
@@ -50,19 +51,34 @@ Or use individual scripts:
 
 ## Sensor Details
 
-### Sensor 1: Temperature (Serial/PTY)
+### Serial Sensors (Unified: sensor_serial.py)
 - **Protocol**: Serial via PTY
 - **Default**: 115200 baud, 8N1
 - **Frame Format**: JSON
 - **PTY Device**: Created automatically (e.g., `/dev/pts/5`)
+- **Supported Types**: temperature, pressure, flow, vibration, voltage
+- **Configurable**: sensor_id, sensor_type, low_limit, high_limit, unit, baudrate, serial parameters
 
-### Sensor 2: Pressure (Serial/PTY)
-- **Protocol**: Serial via PTY
-- **Default**: 115200 baud, 8N1
-- **Frame Format**: JSON
-- **PTY Device**: Created automatically (e.g., `/dev/pts/6`)
+**Default Values by Type:**
+- Temperature: 20.0-80.0°C
+- Pressure: 50.0-150.0 PSI
+- Flow: 10.0-100.0 L/min
+- Vibration: 0.0-5.0 mm/s
+- Voltage: 200.0-240.0 V
 
-### Modular TCP Architecture (Sensor 3 & 4)
+**Example Usage:**
+```bash
+# Temperature sensor
+python3 simulators/sensor_serial.py --sensor-id 1 --sensor-type temperature
+
+# Pressure sensor with custom limits
+python3 simulators/sensor_serial.py --sensor-id 2 --sensor-type pressure --low-limit 40.0 --high-limit 160.0
+
+# Flow sensor
+python3 simulators/sensor_serial.py --sensor-id 3 --sensor-type flow
+```
+
+### TCP Sensors (Unified: start_tcp_system.py)
 
 **TCP Server** (`tcp_sensor_server.py`):
 - **Protocol**: TCP Socket Server
@@ -70,31 +86,66 @@ Or use individual scripts:
 - **Role**: Infrastructure server that accepts connections from sensor clients
 - **Function**: Relays data from sensor clients to monitoring clients (main app)
 
-**Sensor 3 Client** (`sensor_3_client.py`):
+**TCP Sensor System** (`start_tcp_system.py`):
 - **Protocol**: TCP Socket Client
-- **Connects to**: TCP Server on `localhost:5000`
-- **Frame Format**: JSON
-- **Sensor**: Flow Rate Sensor 1 (L/min)
-- **Role**: Independent client that connects to server and sends data
+- **Unified launcher** for all TCP sensors
+- **Supports**: flow, vibration, temperature, pressure, voltage
+- **Configurable**: sensor_id, sensor_type, low_limit, high_limit, unit, server host/port
 
-**Sensor 4 Client** (`sensor_4_client.py`):
-- **Protocol**: TCP Socket Client
-- **Connects to**: TCP Server on `localhost:5000`
-- **Frame Format**: JSON
-- **Sensor**: Vibration Sensor 1 (mm/s)
-- **Role**: Independent client that connects to server and sends data
+**Default Values by Type:**
+- Flow: 10.0-100.0 L/min
+- Vibration: 0.0-5.0 mm/s
+- Temperature: 20.0-80.0°C
+- Pressure: 50.0-150.0 PSI
+- Voltage: 200.0-240.0 V
+
+**Example Usage:**
+```bash
+# Start server and connect multiple sensors
+python3 simulators/start_tcp_system.py \\
+  --server-ports 5000 \\
+  --sensor flow:3:localhost:5000 \\
+  --sensor vibration:4:localhost:5000
+
+# With custom limits
+python3 simulators/start_tcp_system.py \\
+  --server-ports 5000 \\
+  --sensor flow:3:localhost:5000:10:100:L/min \\
+  --sensor vibration:4:localhost:5000:0:5:mm/s
+```
 
 **Architecture**:
-1. Start TCP Server first (infrastructure)
-2. Start Sensor 3 Client (connects independently)
-3. Start Sensor 4 Client (connects independently)
-4. Main app connects to server and receives data from both sensors
+1. Start TCP Server (via start_tcp_system.py or separately)
+2. Connect sensor clients (via start_tcp_system.py)
+3. Main app connects to server and receives data from all sensors
 
-### Sensor 5: Voltage (Modbus/TCP)
+### Modbus Sensors (Unified: sensor_modbus.py)
 - **Protocol**: Modbus/TCP
 - **Default**: `localhost:1502`, Unit ID: 1, Register: 0
 - **Frame Format**: Modbus/TCP (Function Code 3)
 - **Data Encoding**: Integer × 10 (e.g., 2205 for 220.5V)
+- **Supported Types**: voltage, temperature, pressure, flow, vibration
+- **Configurable**: sensor_id, sensor_type, low_limit, high_limit, unit, host, port, unit_id, register
+
+**Default Values by Type:**
+- Voltage: 200.0-240.0 V
+- Temperature: 20.0-80.0°C
+- Pressure: 50.0-150.0 PSI
+- Flow: 10.0-100.0 L/min
+- Vibration: 0.0-5.0 mm/s
+
+**Example Usage:**
+```bash
+# Voltage sensor (default)
+python3 simulators/sensor_modbus.py --sensor-id 5 --sensor-type voltage
+
+# Temperature sensor with custom limits
+python3 simulators/sensor_modbus.py --sensor-id 6 --sensor-type temperature --low-limit 15.0 --high-limit 90.0
+
+# Using simplified config string
+python3 simulators/sensor_modbus.py --config "voltage:5:localhost:1502:1:0"
+python3 simulators/sensor_modbus.py --config "voltage:5:localhost:1502:1:0:200:240:V"
+```
 
 ## Configuration
 

@@ -31,6 +31,7 @@ class RemoteConsoleServer:
         self.client_roles: Dict[websockets.WebSocketServerProtocol, str] = {}
         self.sensor_readings: Dict[int, SensorReading] = {}
         self.alarm_log: list = []
+        self.system_logs: list = []  # System logs for live log viewer
         self.clear_alarms_callback = None  # Callback to clear alarms in main GUI
         self.command_handlers = {
             "get_status": self.handle_get_status,
@@ -61,11 +62,61 @@ class RemoteConsoleServer:
     
     async def unregister_client(self, websocket: websockets.WebSocketServerProtocol):
         """Unregister a client"""
+        username = self.client_roles.get(websocket, None)
         self.clients.discard(websocket)
         self.authenticated_clients.discard(websocket)
         if websocket in self.client_roles:
             del self.client_roles[websocket]
+        
+        # Log user logout if they were authenticated
+        if username:
+            client_addr = f"{websocket.remote_address[0]}:{websocket.remote_address[1]}"
+            self.add_system_log(f"User '{username}' logged out from {client_addr}", "INFO")
+        
         print(f"Client disconnected: {websocket.remote_address}")
+    
+    def add_system_log(self, message: str, level: str = "INFO"):
+        """Add a system log entry"""
+        log_entry = {
+            "level": level,
+            "timestamp": datetime.now().isoformat(),
+            "message": message
+        }
+        self.system_logs.append(log_entry)
+        # Keep only last 1000 logs
+        if len(self.system_logs) > 1000:
+            self.system_logs = self.system_logs[-1000:]
+        
+        # Broadcast log to all authenticated clients (fire and forget)
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                asyncio.create_task(self.broadcast_log(log_entry))
+            else:
+                loop.run_until_complete(self.broadcast_log(log_entry))
+        except RuntimeError:
+            # If no event loop is running, skip broadcasting (will be sent on next get_logs)
+            pass
+    
+    async def broadcast_log(self, log_entry: Dict):
+        """Broadcast log entry to all authenticated clients"""
+        if not self.authenticated_clients:
+            return
+        
+        message = json.dumps({
+            "type": "log",
+            "log": log_entry
+        })
+        
+        disconnected = set()
+        for client in self.authenticated_clients:
+            try:
+                await client.send(message)
+            except websockets.exceptions.ConnectionClosed:
+                disconnected.add(client)
+        
+        for client in disconnected:
+            await self.unregister_client(client)
     
     async def authenticate(self, websocket: websockets.WebSocketServerProtocol, 
                           message: Dict) -> bool:
@@ -77,12 +128,20 @@ class RemoteConsoleServer:
             if self.access_control[username]["password"] == password:
                 self.authenticated_clients.add(websocket)
                 self.client_roles[websocket] = username
+                
+                # Log user login
+                client_addr = f"{websocket.remote_address[0]}:{websocket.remote_address[1]}"
+                self.add_system_log(f"User '{username}' logged in from {client_addr}", "INFO")
+                
                 await websocket.send(json.dumps({
                     "type": "auth_success",
                     "role": username,
                     "permissions": self.access_control[username]["permissions"]
                 }))
                 return True
+        
+        # Log failed authentication attempt
+        self.add_system_log(f"Failed authentication attempt for user '{username}'", "WARNING")
         
         await websocket.send(json.dumps({
             "type": "auth_failure",
@@ -154,8 +213,14 @@ class RemoteConsoleServer:
         if not self.has_permission(websocket, "write"):
             return {"type": "error", "message": "Permission denied"}
         
+        username = self.client_roles.get(websocket, "Unknown")
+        alarm_count = len(self.alarm_log)
+        
         # Clear alarms in remote console
         self.alarm_log.clear()
+        
+        # Log alarm clearing event
+        self.add_system_log(f"User '{username}' cleared alarm log ({alarm_count} alarms removed)", "INFO")
         
         # Clear alarms in main GUI if callback is set
         if self.clear_alarms_callback:
@@ -190,14 +255,29 @@ class RemoteConsoleServer:
     async def handle_get_logs(self, websocket: websockets.WebSocketServerProtocol, 
                              data: Dict) -> Dict:
         """Handle get_logs command - Live log viewer"""
-        limit = data.get("limit", 50)
+        limit = data.get("limit", 100)
+        
+        # Combine system logs and alarm logs
         logs = []
+        
+        # Add system logs (most recent first)
+        for log in self.system_logs[-limit:]:
+            logs.append(log)
+        
+        # Add alarm logs
         for alarm in self.alarm_log[-limit:]:
             logs.append({
                 "level": "ALARM",
                 "timestamp": alarm.timestamp.isoformat(),
                 "message": f"{alarm.alarm_type} alarm on {alarm.sensor_name}: {alarm.value:.2f} {alarm.unit}"
             })
+        
+        # Sort by timestamp (most recent first)
+        logs.sort(key=lambda x: x["timestamp"], reverse=True)
+        
+        # Return only the requested limit
+        logs = logs[:limit]
+        
         return {
             "type": "logs",
             "logs": logs,
