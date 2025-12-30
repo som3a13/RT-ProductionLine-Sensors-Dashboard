@@ -19,7 +19,7 @@ class TCPSensorCommunicator:
     
     Architecture:
     - Connects to TCP sensor server (tcp_sensor_server.py)
-    - Receives data relayed from sensor clients (sensor_3_client.py, sensor_4_client.py)
+    - Receives data relayed from sensor clients (via start_tcp_system.py or run_tcp_sensor_clients.py)
     - Parses JSON frames and routes to correct sensor configurations
     """
     

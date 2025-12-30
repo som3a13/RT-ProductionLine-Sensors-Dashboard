@@ -40,7 +40,7 @@ class GenericTCPSensorClient:
         self.socket = None
         self.send_thread = None
         
-        # Trend-based generator (copy from sensor_3_client)
+        # Trend-based generator for realistic sensor value simulation
         class TrendBasedGenerator:
             def __init__(self, low_limit, high_limit, base_value=None):
                 self.low_limit = low_limit

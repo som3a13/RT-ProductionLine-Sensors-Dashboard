@@ -9,7 +9,7 @@ from PyQt5.QtCore import QObject, pyqtSignal
 
 from core.sensor_data import SensorReading, SensorConfig, AlarmEvent
 from sensors.sensor_serial import SerialSensorCommunicator
-from sensors.sensor_communication import TCPSensorCommunicator
+from sensors.sensor_tcp import TCPSensorCommunicator
 from sensors.sensor_modbus import ModbusSensorCommunicator
 
 

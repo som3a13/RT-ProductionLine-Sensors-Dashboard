@@ -1,13 +1,50 @@
 #!/usr/bin/env python3
 """
-Script to read Sensor 1 (Temperature) data from PTY device
+Script to read sensor data from PTY device
 Connects to PTY device and displays incoming sensor readings
+Supports simplified config string format
 """
 import serial
 import json
 import sys
 import argparse
 from datetime import datetime
+
+
+def parse_config_string(config_str: str):
+    """
+    Parse simplified configuration string format:
+    port:baudrate:bytesizeparitystopbits
+    
+    Example: /dev/pts/5:115200:8N1
+    """
+    parts = config_str.split(':')
+    if len(parts) != 3:
+        raise ValueError(f"Invalid config format. Expected: port:baudrate:bytesizeparitystopbits\n"
+                        f"Got {len(parts)} parts, expected 3\n"
+                        f"Example: /dev/pts/5:115200:8N1")
+    
+    port = parts[0].strip()
+    baudrate = int(parts[1].strip()) if parts[1].strip() else 115200
+    
+    # Parse serial parameters: bytesizeparitystopbits (e.g., 8N1)
+    serial_params = parts[2].strip()
+    # Extract bytesize (first digit)
+    bytesize = int(serial_params[0]) if len(serial_params) > 0 and serial_params[0].isdigit() else 8
+    
+    # Extract parity (second character: N, E, or O)
+    parity = serial_params[1] if len(serial_params) > 1 and serial_params[1] in 'NEO' else 'N'
+    
+    # Extract stopbits (last digit)
+    stopbits = int(serial_params[2]) if len(serial_params) > 2 and serial_params[2].isdigit() else 1
+    
+    return {
+        'port': port,
+        'baudrate': baudrate,
+        'bytesize': bytesize,
+        'parity': parity,
+        'stopbits': stopbits
+    }
 
 
 def read_sensor_data(port, baudrate=115200, bytesize=8, parity='N', stopbits=1):
@@ -33,7 +70,7 @@ def read_sensor_data(port, baudrate=115200, bytesize=8, parity='N', stopbits=1):
         )
         
         print("=" * 80)
-        print("Sensor 1 Frame Reader")
+        print("Serial Sensor Frame Reader")
         print("=" * 80)
         print(f"✓ Connected to {port}")
         print(f"  Baudrate: {baudrate}, Serial: {bytesize}{parity}{stopbits}")
@@ -132,7 +169,7 @@ def read_sensor_data(port, baudrate=115200, bytesize=8, parity='N', stopbits=1):
     except serial.SerialException as e:
         print(f"Error connecting to {port}: {e}")
         print("\nMake sure:")
-        print("  1. The sensor simulator is running (sensor_1.py)")
+        print("  1. The sensor simulator is running (sensor_serial.py)")
         print("  2. The PTY device path is correct")
         print("  3. No other process is using the device")
         sys.exit(1)
@@ -143,12 +180,32 @@ def read_sensor_data(port, baudrate=115200, bytesize=8, parity='N', stopbits=1):
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Read Sensor 1 (Temperature) data from PTY device'
+        description='Read sensor data from PTY device',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Using simplified config string:
+  python read_sensor_serial.py --config "/dev/pts/5:115200:8N1"
+  python read_sensor_serial.py --config "/dev/pts/6:9600:7E2"
+  
+  # Using individual arguments:
+  python read_sensor_serial.py /dev/pts/5
+  python read_sensor_serial.py /dev/pts/5 --baudrate 115200 --bytesize 8 --parity N --stopbits 1
+        """
+    )
+    parser.add_argument(
+        '--config',
+        type=str,
+        default=None,
+        help='Simplified config string: port:baudrate:bytesizeparitystopbits\n'
+             'Example: /dev/pts/5:115200:8N1'
     )
     parser.add_argument(
         'port',
         type=str,
-        help='PTY device path (e.g., /dev/pts/5)'
+        nargs='?',
+        default=None,
+        help='PTY device path (e.g., /dev/pts/5) - required if --config not used'
     )
     parser.add_argument(
         '--baudrate',
@@ -180,12 +237,34 @@ def main():
     
     args = parser.parse_args()
     
+    # If config string is provided, parse it and override other arguments
+    if args.config:
+        try:
+            config = parse_config_string(args.config)
+            port = config['port']
+            baudrate = config['baudrate']
+            bytesize = config['bytesize']
+            parity = config['parity']
+            stopbits = config['stopbits']
+        except ValueError as e:
+            print(f"Error parsing config string: {e}")
+            sys.exit(1)
+    else:
+        # Use individual arguments
+        if not args.port:
+            parser.error("Either --config or port argument is required")
+        port = args.port
+        baudrate = args.baudrate
+        bytesize = args.bytesize
+        parity = args.parity
+        stopbits = args.stopbits
+    
     read_sensor_data(
-        port=args.port,
-        baudrate=args.baudrate,
-        bytesize=args.bytesize,
-        parity=args.parity,
-        stopbits=args.stopbits
+        port=port,
+        baudrate=baudrate,
+        bytesize=bytesize,
+        parity=parity,
+        stopbits=stopbits
     )
 
 

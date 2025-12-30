@@ -1,5 +1,6 @@
 """
-Sensor 5 Simulator - Voltage Sensor (Modbus/TCP)
+Unified Modbus/TCP Sensor Simulator
+Supports multiple sensor types: temperature, pressure, flow, vibration, voltage
 Uses Modbus/TCP server to provide sensor data via holding registers
 """
 import threading
@@ -70,14 +71,40 @@ class TrendBasedGenerator:
         return round(self.current_value, 2)
 
 
-class Sensor5Simulator:
-    """Modbus/TCP-based simulator for Sensor 5 (Voltage Sensor)"""
+def get_defaults_for_type(sensor_type: str):
+    """Get default values for sensor type"""
+    defaults = {
+        'flow': {'low': 10.0, 'high': 100.0, 'unit': 'L/min', 'name': 'Flow Rate'},
+        'vibration': {'low': 0.0, 'high': 5.0, 'unit': 'mm/s', 'name': 'Vibration'},
+        'temperature': {'low': 20.0, 'high': 80.0, 'unit': '°C', 'name': 'Temperature'},
+        'pressure': {'low': 50.0, 'high': 150.0, 'unit': 'PSI', 'name': 'Pressure'},
+        'voltage': {'low': 200.0, 'high': 240.0, 'unit': 'V', 'name': 'Voltage'},
+    }
     
-    def __init__(self, host="localhost", port=1502, unit_id=1, register=0):
+    sensor_type_lower = sensor_type.lower()
+    for key, value in defaults.items():
+        if key in sensor_type_lower or sensor_type_lower in key:
+            return value
+    
+    # Default to voltage if type not found (Modbus is commonly used for voltage)
+    return defaults['voltage']
+
+
+class ModbusSensorSimulator:
+    """Modbus/TCP-based simulator for sensors (Voltage, Temperature, etc.)"""
+    
+    def __init__(self, sensor_id=5, sensor_type='voltage',
+                 low_limit=None, high_limit=None, unit=None,
+                 host="localhost", port=1502, unit_id=1, register=0):
         """
         Initialize Modbus sensor simulator
         
         Args:
+            sensor_id: Sensor ID (default: 5)
+            sensor_type: Sensor type - 'temperature', 'pressure', 'flow', 'vibration', 'voltage' (default: 'voltage')
+            low_limit: Low alarm limit (default: based on sensor_type)
+            high_limit: High alarm limit (default: based on sensor_type)
+            unit: Unit of measurement (default: based on sensor_type)
             host: Modbus server host (default: localhost)
             port: Modbus server port (default: 1502)
             unit_id: Modbus unit ID (default: 1)
@@ -92,12 +119,16 @@ class Sensor5Simulator:
         self.modbus_store = None
         self.worker_thread = None
         
+        # Get defaults for sensor type
+        defaults = get_defaults_for_type(sensor_type)
+        
         # Sensor configuration
-        self.sensor_id = 5
-        self.sensor_name = "Voltage Sensor 1"
-        self.low_limit = 200.0
-        self.high_limit = 240.0
-        self.unit = "V"
+        self.sensor_id = sensor_id
+        self.sensor_type = sensor_type.lower()
+        self.sensor_name = f"{defaults['name']} Sensor {sensor_id}"
+        self.low_limit = low_limit if low_limit is not None else defaults['low']
+        self.high_limit = high_limit if high_limit is not None else defaults['high']
+        self.unit = unit if unit is not None else defaults['unit']
         self.base_value = (self.low_limit + self.high_limit) / 2
         self.faulty = False
         
@@ -217,6 +248,9 @@ class Sensor5Simulator:
                 test_sock.close()
                 if result == 0:
                     print(f"✓ {self.sensor_name} Modbus/TCP simulator started")
+                    print(f"  Sensor ID: {self.sensor_id}")
+                    print(f"  Sensor Type: {self.sensor_type}")
+                    print(f"  Limits: {self.low_limit} - {self.high_limit} {self.unit}")
                     print(f"  Host: {self.host}")
                     print(f"  Port: {self.port}")
                     print(f"  Unit ID: {self.unit_id}")
@@ -236,7 +270,7 @@ class Sensor5Simulator:
         except OSError as e:
             if "permission denied" in str(e).lower() or "address already in use" in str(e).lower():
                 print(f"Modbus port {self.port} requires root or is in use.")
-                print(f"Try using a different port (e.g., --port 1502)")
+                print(f"Try using a different port (e.g., --port 1503)")
             else:
                 print(f"Failed to start Modbus server: {e}")
             sys.exit(1)
@@ -254,11 +288,85 @@ class Sensor5Simulator:
         print(f"{self.sensor_name} Modbus/TCP simulator stopped.")
 
 
+def parse_config_string(config_str: str):
+    """
+    Parse simplified configuration string format:
+    type:id:host:port:unit_id:register[:low[:high[:unit]]]
+    
+    Example: voltage:5:localhost:1502:1:0
+    Example: voltage:5:localhost:1502:1:0:200:240:V
+    """
+    parts = config_str.split(':')
+    if len(parts) < 6:
+        raise ValueError(f"Invalid config format. Minimum required: type:id:host:port:unit_id:register\n"
+                        f"Got {len(parts)} parts, expected at least 6\n"
+                        f"Examples:\n"
+                        f"  voltage:5:localhost:1502:1:0\n"
+                        f"  voltage:5:localhost:1502:1:0:200:240\n"
+                        f"  voltage:5:localhost:1502:1:0:200:240:V")
+    
+    sensor_type = parts[0].strip()
+    sensor_id = int(parts[1].strip())
+    host = parts[2].strip()
+    port = int(parts[3].strip())
+    unit_id = int(parts[4].strip())
+    register = int(parts[5].strip())
+    
+    # Optional parameters (limits and unit)
+    low_limit = float(parts[6].strip()) if len(parts) > 6 and parts[6].strip() else None
+    high_limit = float(parts[7].strip()) if len(parts) > 7 and parts[7].strip() else None
+    unit = parts[8].strip() if len(parts) > 8 and parts[8].strip() else None
+    
+    return {
+        'sensor_type': sensor_type,
+        'sensor_id': sensor_id,
+        'host': host,
+        'port': port,
+        'unit_id': unit_id,
+        'register': register,
+        'low_limit': low_limit,
+        'high_limit': high_limit,
+        'unit': unit
+    }
+
+
 def main():
     """Main function"""
     import argparse
     
-    parser = argparse.ArgumentParser(description='Sensor 5 (Voltage) Modbus/TCP Simulator')
+    parser = argparse.ArgumentParser(
+        description='Unified Modbus/TCP Sensor Simulator',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Using simplified config string (limits and unit are optional):
+  python sensor_modbus.py --config "voltage:5:localhost:1502:1:0"
+  python sensor_modbus.py --config "voltage:5:localhost:1502:1:0:200:240"
+  python sensor_modbus.py --config "voltage:5:localhost:1502:1:0:200:240:V"
+  python sensor_modbus.py --config "temperature:6:localhost:1503:2:0:20:80:°C"
+  
+  # Using individual arguments:
+  python sensor_modbus.py --sensor-id 5 --sensor-type voltage
+  python sensor_modbus.py --sensor-id 6 --sensor-type temperature --low-limit 20.0 --high-limit 80.0
+        """
+    )
+    
+    parser.add_argument('--config', type=str, default=None,
+                        help='Simplified config string: type:id:host:port:unit_id:register[:low[:high[:unit]]]\n'
+                             'Examples:\n'
+                             '  voltage:5:localhost:1502:1:0                    (uses defaults)\n'
+                             '  voltage:5:localhost:1502:1:0:200:240             (custom limits)\n'
+                             '  voltage:5:localhost:1502:1:0:200:240:V          (all parameters)')
+    parser.add_argument('--sensor-id', type=int, default=5, help='Sensor ID (default: 5)')
+    parser.add_argument('--sensor-type', type=str, default='voltage',
+                        choices=['temperature', 'pressure', 'flow', 'vibration', 'voltage'],
+                        help='Sensor type (default: voltage)')
+    parser.add_argument('--low-limit', type=float, default=None,
+                        help='Low alarm limit (default: based on sensor type)')
+    parser.add_argument('--high-limit', type=float, default=None,
+                        help='High alarm limit (default: based on sensor type)')
+    parser.add_argument('--unit', type=str, default=None,
+                        help='Unit of measurement (default: based on sensor type)')
     parser.add_argument('--host', type=str, default='localhost', help='Modbus server host (default: localhost)')
     parser.add_argument('--port', type=int, default=1502, help='Modbus server port (default: 1502)')
     parser.add_argument('--unit-id', type=int, default=1, help='Modbus unit ID (default: 1)')
@@ -266,11 +374,44 @@ def main():
     
     args = parser.parse_args()
     
-    simulator = Sensor5Simulator(
-        host=args.host,
-        port=args.port,
-        unit_id=args.unit_id,
-        register=args.register
+    # If config string is provided, parse it and override other arguments
+    if args.config:
+        try:
+            config = parse_config_string(args.config)
+            sensor_id = config['sensor_id']
+            sensor_type = config['sensor_type']
+            low_limit = config['low_limit']
+            high_limit = config['high_limit']
+            unit = config['unit']
+            host = config['host']
+            port = config['port']
+            unit_id = config['unit_id']
+            register = config['register']
+        except ValueError as e:
+            print(f"Error parsing config string: {e}")
+            sys.exit(1)
+    else:
+        # Use individual arguments
+        sensor_id = args.sensor_id
+        sensor_type = args.sensor_type
+        low_limit = args.low_limit
+        high_limit = args.high_limit
+        unit = args.unit
+        host = args.host
+        port = args.port
+        unit_id = args.unit_id
+        register = args.register
+    
+    simulator = ModbusSensorSimulator(
+        sensor_id=sensor_id,
+        sensor_type=sensor_type,
+        low_limit=low_limit,
+        high_limit=high_limit,
+        unit=unit,
+        host=host,
+        port=port,
+        unit_id=unit_id,
+        register=register
     )
     
     try:
@@ -286,4 +427,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
