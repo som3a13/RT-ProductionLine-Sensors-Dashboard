@@ -8,7 +8,7 @@
       "unit": "°C",
       "protocol": "serial",
       "protocol_config": {
-        "port": "/dev/pts/2",
+        "port": "/dev/pts/4",
         "baudrate": 115200,
         "bytesize": 8,
         "parity": "N",
@@ -23,7 +23,7 @@
       "unit": "PSI",
       "protocol": "serial",
       "protocol_config": {
-        "port": "/dev/pts/4",
+        "port": "/dev/pts/8",
         "baudrate": 115200,
         "bytesize": 8,
         "parity": "N",
@@ -77,6 +77,20 @@
         "host": "localhost",
         "port": 1502,
         "unit_id": 1,
+        "register": 0
+      }
+    },
+    {
+      "name": "Pressure Sensor 2",
+      "id": 7,
+      "low_limit": 50.0,
+      "high_limit": 150.0,
+      "unit": "PSI",
+      "protocol": "modbus",
+      "protocol_config": {
+        "host": "localhost",
+        "port": 1502,
+        "unit_id": 2,
         "register": 0
       }
     }
