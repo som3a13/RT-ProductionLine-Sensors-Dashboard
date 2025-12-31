@@ -8,9 +8,9 @@ from typing import Dict, List, Optional
 from PyQt5.QtCore import QObject, pyqtSignal
 
 from core.sensor_data import SensorReading, SensorConfig, AlarmEvent
-from sensors.sensor_serial import SerialSensorCommunicator
-from sensors.sensor_tcp import TCPSensorCommunicator
-from sensors.sensor_modbus import ModbusSensorCommunicator
+from sensors.sensor_serial_comm import SerialSensorCommunicator
+from sensors.sensor_tcp_comm import TCPSensorCommunicator
+from sensors.sensor_modbus_comm import ModbusSensorCommunicator
 
 
 class SensorManager(QObject):
@@ -84,13 +84,15 @@ class SensorManager(QObject):
                 key = f"modbus_{host}_{port}"
                 
                 if key not in self.modbus_communicators:
+                    # Use first sensor's unit_id as default (for backward compatibility)
                     comm = ModbusSensorCommunicator(host=host, port=port, unit_id=unit_id)
                     comm.register_callback(self._on_reading_received)
                     self.modbus_communicators[key] = comm
                 else:
                     comm = self.modbus_communicators[key]
                 
-                comm.add_sensor_config(sensor_id, config, register)
+                # Pass unit_id per sensor (allows multiple sensors on same port with different unit_ids)
+                comm.add_sensor_config(sensor_id, config, register, unit_id=unit_id)
                 self.sensor_protocol_map[sensor_id] = key
     
     def _on_reading_received(self, reading: SensorReading):

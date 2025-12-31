@@ -2,6 +2,16 @@
 TCP Communication Module - Handles TCP socket communication with sensors
 Connects to TCP sensor server and receives data relayed from sensor clients
 Uses worker thread for communication, thread-safe queue for data
+
+Communication Architecture:
+- TCPSensorCommunicator: Main communication class
+- Worker Thread: Receives data from TCP sensor server in background
+- Thread-Safe Queue: Stores sensor readings for main thread consumption
+- Callbacks: Notify main thread of new readings (via signals)
+- Frame Format: JSON terminated by newline (\n)
+- Protocol: One communicator per unique host:port combination
+- Multiple sensors can share same server (identified by sensor_id in JSON)
+- Server relays data from multiple sensor clients to application
 """
 import socket
 import json
@@ -17,10 +27,23 @@ class TCPSensorCommunicator:
     """
     Handles TCP socket communication with sensors using worker thread
     
+    Communication Flow:
+    1. Connects to TCP sensor server (tcp_sensor_server.py)
+    2. Server relays data from sensor clients to application
+    3. Worker thread continuously receives JSON frames
+    4. Parses JSON frames terminated by newline (\n)
+    5. Creates SensorReading objects and queues them
+    6. Callbacks notify main thread via signals
+    
     Architecture:
     - Connects to TCP sensor server (tcp_sensor_server.py)
     - Receives data relayed from sensor clients (via start_tcp_system.py or run_tcp_sensor_clients.py)
     - Parses JSON frames and routes to correct sensor configurations
+    
+    Multi-Sensor Support:
+    - Multiple sensors can share same TCP server
+    - Each sensor identified by sensor_id in JSON frame
+    - One communicator per unique host:port combination
     """
     
     def __init__(self, host: str = "localhost", port: int = 5000):

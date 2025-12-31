@@ -2,12 +2,14 @@
 Unified Modbus/TCP Sensor Simulator
 Supports multiple sensor types: temperature, pressure, flow, vibration, voltage
 Uses Modbus/TCP server to provide sensor data via holding registers
+Supports multiple sensors on the same port using different unit IDs
 """
 import threading
 import time
 import random
 import sys
 from datetime import datetime
+from collections import defaultdict
 
 
 class TrendBasedGenerator:
@@ -90,6 +92,11 @@ def get_defaults_for_type(sensor_type: str):
     return defaults['voltage']
 
 
+# Global server manager to share Modbus servers across sensors on same host:port
+_modbus_servers = {}  # (host, port) -> {'context': ModbusServerContext, 'stores': {unit_id: ModbusSlaveContext}, 'thread': Thread, 'running': bool}
+_server_lock = threading.Lock()
+
+
 class ModbusSensorSimulator:
     """Modbus/TCP-based simulator for sensors (Voltage, Temperature, etc.)"""
     
@@ -168,9 +175,10 @@ class ModbusSensorSimulator:
                 int_value = int_value + 65536
             
             # Function code 3 = holding registers
+            # Use the store associated with this sensor's unit_id
             self.modbus_store.setValues(3, self.register, [int_value])
         except Exception as e:
-            print(f"Modbus update error: {e}")
+            print(f"Modbus update error for {self.sensor_name}: {e}")
     
     def modbus_worker(self):
         """Worker thread that updates Modbus register values"""
@@ -180,111 +188,31 @@ class ModbusSensorSimulator:
             time.sleep(0.5)  # Update every 0.5 seconds
     
     def start(self):
-        """Start Modbus/TCP server"""
-        try:
-            # Try to import pymodbus
-            try:
-                from pymodbus.server import StartTcpServer
-            except ImportError:
-                from pymodbus.server.sync import StartTcpServer
-            
-            from pymodbus.datastore import ModbusSlaveContext, ModbusServerContext
-            from pymodbus.datastore import ModbusSequentialDataBlock
-            
-            # Create Modbus data store with initial values
-            initial_hr_values = [0] * 100
-            store = ModbusSlaveContext(
-                di=ModbusSequentialDataBlock(0, [0]*100),
-                co=ModbusSequentialDataBlock(0, [0]*100),
-                hr=ModbusSequentialDataBlock(0, initial_hr_values),
-                ir=ModbusSequentialDataBlock(0, [0]*100)
-            )
-            
-            # Create server context
-            context = ModbusServerContext(slaves={self.unit_id: store}, single=False)
-            self.modbus_context = context
-            self.modbus_store = store
-            
-            # Initialize register with default value
-            base_value = (self.low_limit + self.high_limit) / 2
-            int_value = int(round(base_value * 10))
-            if int_value < 0:
-                int_value = int_value + 65536
-            store.setValues(3, self.register, [int_value])
-            
-            # Start worker thread to update values
-            self.running = True
-            self.worker_thread = threading.Thread(target=self.modbus_worker, daemon=True)
-            self.worker_thread.start()
-            
-            # Start Modbus server in separate thread
-            def start_server():
-                try:
-                    # Try async server first
-                    from pymodbus.server.async_io import StartAsyncTcpServer
-                    import asyncio
-                    
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-                    loop.run_until_complete(StartAsyncTcpServer(context=context, address=(self.host, self.port)))
-                except ImportError:
-                    # Fallback to sync server
-                    StartTcpServer(context=context, address=(self.host, self.port))
-                except Exception as e:
-                    print(f"Modbus server error: {e}")
-            
-            server_thread = threading.Thread(target=start_server, daemon=True)
-            server_thread.start()
-            
-            # Wait for server to start
-            time.sleep(2.0)
-            
-            # Verify server is listening
-            import socket
-            try:
-                test_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                test_sock.settimeout(1)
-                result = test_sock.connect_ex((self.host, self.port))
-                test_sock.close()
-                if result == 0:
-                    print(f"✓ {self.sensor_name} Modbus/TCP simulator started")
-                    print(f"  Sensor ID: {self.sensor_id}")
-                    print(f"  Sensor Type: {self.sensor_type}")
-                    print(f"  Limits: {self.low_limit} - {self.high_limit} {self.unit}")
-                    print(f"  Host: {self.host}")
-                    print(f"  Port: {self.port}")
-                    print(f"  Unit ID: {self.unit_id}")
-                    print(f"  Register: {self.register}")
-                    print(f"  Frame Format: {self.frame_format}")
-                    print(f"\nWorker thread should connect to: {self.host}:{self.port}")
-                    print(f"  Unit ID: {self.unit_id}, Register: {self.register}")
-                    print("Press Ctrl+C to stop.\n")
-                else:
-                    print(f"⚠ Modbus server may not be ready on {self.host}:{self.port}")
-            except:
-                print(f"⚠ Could not verify Modbus server on {self.host}:{self.port}")
-                
-        except ImportError:
-            print("Error: pymodbus not available. Install with: pip install pymodbus")
-            sys.exit(1)
-        except OSError as e:
-            if "permission denied" in str(e).lower() or "address already in use" in str(e).lower():
-                print(f"Modbus port {self.port} requires root or is in use.")
-                print(f"Try using a different port (e.g., --port 1503)")
-            else:
-                print(f"Failed to start Modbus server: {e}")
-            sys.exit(1)
-        except Exception as e:
-            print(f"Failed to start Modbus simulator: {e}")
-            import traceback
-            traceback.print_exc()
-            sys.exit(1)
+        """
+        Start Modbus sensor (server is created in main() for grouped sensors)
+        This method is kept for backward compatibility but is now called from main()
+        """
+        # Server setup is now done in main() to support multiple sensors on same port
+        # This method is a placeholder for backward compatibility
+        pass
     
     def stop(self):
         """Stop the simulator"""
         self.running = False
         if self.worker_thread:
             self.worker_thread.join(timeout=2.0)
+        
+        # Remove from server tracking
+        server_key = (self.host, self.port)
+        with _server_lock:
+            if server_key in _modbus_servers:
+                server_info = _modbus_servers[server_key]
+                if self in server_info['sensors']:
+                    server_info['sensors'].remove(self)
+                
+                # If no more sensors, we could stop the server, but for simplicity
+                # we'll leave it running (daemon threads will clean up on exit)
+        
         print(f"{self.sensor_name} Modbus/TCP simulator stopped.")
 
 
@@ -345,15 +273,24 @@ Examples:
   python sensor_modbus.py --config "voltage:5:localhost:1502:1:0:200:240:V"
   python sensor_modbus.py --config "temperature:6:localhost:1503:2:0:20:80:°C"
   
-  # Using individual arguments:
+  # Running multiple sensors at once (different ports):
+  python sensor_modbus.py --config "voltage:5:localhost:1502:1:0" --config "temperature:6:localhost:1503:1:0"
+  
+  # Running multiple sensors on the SAME port (different unit IDs):
+  python sensor_modbus.py --config "voltage:5:localhost:1502:1:0" --config "temperature:6:localhost:1502:2:0"
+  python sensor_modbus.py --config "voltage:5:localhost:1502:1:0" --config "pressure:7:localhost:1502:2:0" --config "flow:8:localhost:1502:3:0"
+  
+  # Using individual arguments (single sensor only):
   python sensor_modbus.py --sensor-id 5 --sensor-type voltage
   python sensor_modbus.py --sensor-id 6 --sensor-type temperature --low-limit 20.0 --high-limit 80.0
         """
     )
     
-    parser.add_argument('--config', type=str, default=None,
+    parser.add_argument('--config', type=str, default=None, action='append',
                         help='Simplified config string: type:id:host:port:unit_id:register[:low[:high[:unit]]]\n'
+                             'Can be specified multiple times to run multiple sensors.\n'
                              'Examples:\n'
+                             '  --config "voltage:5:localhost:1502:1:0" --config "temperature:6:localhost:1503:1:0"\n'
                              '  voltage:5:localhost:1502:1:0                    (uses defaults)\n'
                              '  voltage:5:localhost:1502:1:0:200:240             (custom limits)\n'
                              '  voltage:5:localhost:1502:1:0:200:240:V          (all parameters)')
@@ -374,54 +311,188 @@ Examples:
     
     args = parser.parse_args()
     
-    # If config string is provided, parse it and override other arguments
+    simulators = []
+    
+    # If config strings are provided, create simulators for each
     if args.config:
-        try:
-            config = parse_config_string(args.config)
-            sensor_id = config['sensor_id']
-            sensor_type = config['sensor_type']
-            low_limit = config['low_limit']
-            high_limit = config['high_limit']
-            unit = config['unit']
-            host = config['host']
-            port = config['port']
-            unit_id = config['unit_id']
-            register = config['register']
-        except ValueError as e:
-            print(f"Error parsing config string: {e}")
-            sys.exit(1)
+        print(f"Creating {len(args.config)} Modbus sensor simulator(s)...\n")
+        for config_str in args.config:
+            try:
+                config = parse_config_string(config_str)
+                simulator = ModbusSensorSimulator(
+                    sensor_id=config['sensor_id'],
+                    sensor_type=config['sensor_type'],
+                    low_limit=config['low_limit'],
+                    high_limit=config['high_limit'],
+                    unit=config['unit'],
+                    host=config['host'],
+                    port=config['port'],
+                    unit_id=config['unit_id'],
+                    register=config['register']
+                )
+                simulators.append(simulator)
+            except ValueError as e:
+                print(f"Error parsing config string '{config_str}': {e}")
+                sys.exit(1)
     else:
-        # Use individual arguments
-        sensor_id = args.sensor_id
-        sensor_type = args.sensor_type
-        low_limit = args.low_limit
-        high_limit = args.high_limit
-        unit = args.unit
-        host = args.host
-        port = args.port
-        unit_id = args.unit_id
-        register = args.register
+        # Use individual arguments (single simulator)
+        simulator = ModbusSensorSimulator(
+            sensor_id=args.sensor_id,
+            sensor_type=args.sensor_type,
+            low_limit=args.low_limit,
+            high_limit=args.high_limit,
+            unit=args.unit,
+            host=args.host,
+            port=args.port,
+            unit_id=args.unit_id,
+            register=args.register
+        )
+        simulators.append(simulator)
     
-    simulator = ModbusSensorSimulator(
-        sensor_id=sensor_id,
-        sensor_type=sensor_type,
-        low_limit=low_limit,
-        high_limit=high_limit,
-        unit=unit,
-        host=host,
-        port=port,
-        unit_id=unit_id,
-        register=register
-    )
+    # Group simulators by host:port to share servers
+    servers_dict = defaultdict(list)  # (host, port) -> [simulators]
+    for simulator in simulators:
+        servers_dict[(simulator.host, simulator.port)].append(simulator)
     
+    # Start servers (one per unique host:port)
+    print(f"\n{'='*60}")
+    print("Starting Modbus sensor simulators...")
+    print(f"{'='*60}\n")
+    
+    for (host, port), server_simulators in servers_dict.items():
+        try:
+            # Create Modbus server with all unit_ids for this host:port
+            try:
+                from pymodbus.server import StartTcpServer
+            except ImportError:
+                from pymodbus.server.sync import StartTcpServer
+            
+            from pymodbus.datastore import ModbusSlaveContext, ModbusServerContext
+            from pymodbus.datastore import ModbusSequentialDataBlock
+            
+            # Create stores for all unit_ids
+            stores = {}
+            for simulator in server_simulators:
+                if simulator.unit_id not in stores:
+                    initial_hr_values = [0] * 100
+                    store = ModbusSlaveContext(
+                        di=ModbusSequentialDataBlock(0, [0]*100),
+                        co=ModbusSequentialDataBlock(0, [0]*100),
+                        hr=ModbusSequentialDataBlock(0, initial_hr_values),
+                        ir=ModbusSequentialDataBlock(0, [0]*100)
+                    )
+                    stores[simulator.unit_id] = store
+                    
+                    # Initialize register with default value
+                    base_value = (simulator.low_limit + simulator.high_limit) / 2
+                    int_value = int(round(base_value * 10))
+                    if int_value < 0:
+                        int_value = int_value + 65536
+                    store.setValues(3, simulator.register, [int_value])
+            
+            # Create server context with all unit_ids
+            context = ModbusServerContext(slaves=stores, single=False)
+            
+            # Store server info
+            server_key = (host, port)
+            with _server_lock:
+                _modbus_servers[server_key] = {
+                    'context': context,
+                    'stores': stores,
+                    'thread': None,
+                    'running': False,
+                    'sensors': server_simulators
+                }
+            
+            # Start Modbus server in separate thread
+            def start_server():
+                try:
+                    # Try async server first
+                    from pymodbus.server.async_io import StartAsyncTcpServer
+                    import asyncio
+                    
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    loop.run_until_complete(StartAsyncTcpServer(context=context, address=(host, port)))
+                except ImportError:
+                    # Fallback to sync server
+                    StartTcpServer(context=context, address=(host, port))
+                except Exception as e:
+                    print(f"Modbus server error on {host}:{port}: {e}")
+            
+            server_thread = threading.Thread(target=start_server, daemon=True)
+            server_thread.start()
+            
+            with _server_lock:
+                _modbus_servers[server_key]['thread'] = server_thread
+                _modbus_servers[server_key]['running'] = True
+            
+            # Assign context and store to each simulator
+            for simulator in server_simulators:
+                simulator.modbus_context = context
+                simulator.modbus_store = stores[simulator.unit_id]
+                simulator.running = True
+                
+                # Start worker thread for each sensor
+                simulator.worker_thread = threading.Thread(target=simulator.modbus_worker, daemon=True)
+                simulator.worker_thread.start()
+            
+            # Wait for server to start
+            time.sleep(2.0)
+            
+            # Verify server is listening
+            import socket
+            try:
+                test_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                test_sock.settimeout(1)
+                result = test_sock.connect_ex((host, port))
+                test_sock.close()
+                if result == 0:
+                    print(f"✓ Modbus/TCP server started on {host}:{port}")
+                    print(f"  Serving {len(server_simulators)} sensor(s) with unit IDs: {sorted(stores.keys())}")
+                    for simulator in server_simulators:
+                        print(f"  - {simulator.sensor_name} (Unit ID: {simulator.unit_id}, Register: {simulator.register})")
+                        print(f"    Limits: {simulator.low_limit} - {simulator.high_limit} {simulator.unit}")
+                    print()
+                else:
+                    print(f"⚠ Modbus server may not be ready on {host}:{port}")
+            except:
+                print(f"⚠ Could not verify Modbus server on {host}:{port}")
+                
+        except ImportError:
+            print("Error: pymodbus not available. Install with: pip install pymodbus")
+            sys.exit(1)
+        except OSError as e:
+            if "permission denied" in str(e).lower() or "address already in use" in str(e).lower():
+                print(f"Modbus port {port} requires root or is in use.")
+                print(f"Try using a different port (e.g., --port 1503)")
+            else:
+                print(f"Failed to start Modbus server on {host}:{port}: {e}")
+            sys.exit(1)
+        except Exception as e:
+            print(f"Failed to start Modbus server on {host}:{port}: {e}")
+            import traceback
+            traceback.print_exc()
+            sys.exit(1)
+    
+    if simulators:
+        print(f"{'='*60}")
+        print("All Modbus sensor simulators ready. Worker threads should connect to:")
+        for i, simulator in enumerate(simulators, 1):
+            print(f"  {i}. {simulator.sensor_name}")
+            print(f"     Host: {simulator.host}:{simulator.port}, Unit ID: {simulator.unit_id}, Register: {simulator.register}")
+        print(f"{'='*60}\n")
+        print("All simulators running... Press Ctrl+C to stop all.\n")
+    
+    # Keep running
     try:
-        simulator.start()
-        # Keep running
         while True:
             time.sleep(1)
     except KeyboardInterrupt:
-        print("\n\nStopping simulator...")
-        simulator.stop()
+        print("\n\nStopping all simulators...")
+        for simulator in simulators:
+            simulator.stop()
+        print("All simulators stopped.")
         sys.exit(0)
 
 

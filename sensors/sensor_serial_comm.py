@@ -2,6 +2,15 @@
 Serial Communication Module - Handles serial port communication with sensors
 Uses worker thread for communication, thread-safe queue for data
 Supports both real serial ports and TCP sockets (for virtual testing)
+
+Communication Architecture:
+- SerialSensorCommunicator: Main communication class
+- Worker Thread: Reads data from serial port/TCP socket in background
+- Thread-Safe Queue: Stores sensor readings for main thread consumption
+- Callbacks: Notify main thread of new readings (via signals)
+- Frame Format: JSON terminated by newline (\n)
+- Protocol: One communicator per unique serial port/TCP address
+- Multiple sensors can share same port (identified by sensor_id in JSON)
 """
 import serial
 import serial.tools.list_ports
@@ -15,7 +24,21 @@ from core.sensor_data import SensorReading, SensorStatus, SensorConfig
 
 
 class SerialSensorCommunicator:
-    """Handles serial port communication with sensors using worker thread"""
+    """
+    Handles serial port communication with sensors using worker thread
+    
+    Communication Flow:
+    1. Connects to serial port (or TCP socket if port format is "host:port")
+    2. Worker thread continuously reads data in background
+    3. Parses JSON frames terminated by newline (\n)
+    4. Creates SensorReading objects and queues them
+    5. Callbacks notify main thread via signals
+    
+    Multi-Sensor Support:
+    - Multiple sensors can share same serial port
+    - Each sensor identified by sensor_id in JSON frame
+    - One communicator per unique port address
+    """
     
     def __init__(self, port: str, baudrate: int = 9600, timeout: float = 1.0):
         self.port = port

@@ -1,6 +1,18 @@
 """
 Modbus Communication Module - Handles Modbus/TCP communication with sensors
 Uses worker thread for communication, thread-safe queue for data
+
+Communication Architecture:
+- ModbusSensorCommunicator: Main communication class (acts as Modbus CLIENT)
+- Worker Thread: Polls Modbus holding registers in background
+- Thread-Safe Queue: Stores sensor readings for main thread consumption
+- Callbacks: Notify main thread of new readings (via signals)
+- Frame Format: Binary Modbus/TCP (Function Code 3: Read Holding Registers)
+- Protocol: One communicator per unique host:port combination
+- Multiple sensors can share same port using different unit_ids
+- Each sensor has its own unit_id and register address
+- Value Encoding: 16-bit integer × 10 (e.g., 2205 = 220.5)
+- Negative values: Two's complement (e.g., 55546 = -999.0)
 """
 import threading
 import queue
@@ -12,27 +24,54 @@ from core.sensor_data import SensorReading, SensorStatus, SensorConfig
 
 
 class ModbusSensorCommunicator:
-    """Handles Modbus/TCP communication with sensors using worker thread"""
+    """
+    Handles Modbus/TCP communication with sensors using worker thread
+    
+    Communication Flow:
+    1. Connects to Modbus/TCP server (sensor simulator acts as server)
+    2. Polls holding registers at configured interval (default: 500ms)
+    3. Reads 16-bit integer values from registers
+    4. Converts to float (divides by 10 for decimal precision)
+    5. Creates SensorReading objects and queues them
+    6. Callbacks notify main thread via signals
+    
+    Multi-Sensor Support:
+    - Multiple sensors can share same host:port
+    - Each sensor uses different unit_id to distinguish devices
+    - Each sensor has its own register address
+    - Unit IDs are stored per sensor in sensor_unit_id_map
+    """
     
     def __init__(self, host: str, port: int = 502, unit_id: int = 1):
         self.host = host
         self.port = port
-        self.unit_id = unit_id
+        self.unit_id = unit_id  # Default unit_id (for backward compatibility)
         self.client = None
         self.running = False
         self.worker_thread = None
         self.data_queue = queue.Queue()  # Thread-safe queue
         self.sensor_configs: dict = {}
         self.sensor_register_map: dict = {}  # sensor_id -> register_address
+        self.sensor_unit_id_map: dict = {}  # sensor_id -> unit_id (for multiple sensors on same port)
         self.callbacks: list = []
         self.lock = threading.Lock()
         self.poll_interval = 0.5  # Poll every 500ms
         
-    def add_sensor_config(self, sensor_id: int, config: SensorConfig, register_address: int):
-        """Add sensor configuration with Modbus register address"""
+    def add_sensor_config(self, sensor_id: int, config: SensorConfig, register_address: int, unit_id: int = None):
+        """
+        Add sensor configuration with Modbus register address and unit ID
+        
+        Args:
+            sensor_id: Sensor ID
+            config: Sensor configuration
+            register_address: Modbus register address
+            unit_id: Modbus unit ID (if None, uses default from __init__)
+        """
         with self.lock:
             self.sensor_configs[sensor_id] = config
             self.sensor_register_map[sensor_id] = register_address
+            # Store unit_id per sensor (allows multiple sensors on same port with different unit_ids)
+            self.sensor_unit_id_map[sensor_id] = unit_id if unit_id is not None else self.unit_id
     
     def register_callback(self, callback: Callable):
         """Register callback for new sensor readings"""
@@ -120,6 +159,8 @@ class ModbusSensorCommunicator:
                     return None
                 register = self.sensor_register_map[sensor_id]
                 config = self.sensor_configs.get(sensor_id)
+                # Get unit_id for this specific sensor (allows different unit_ids on same port)
+                sensor_unit_id = self.sensor_unit_id_map.get(sensor_id, self.unit_id)
             
             # Check connection
             if not self.client:
@@ -150,14 +191,15 @@ class ModbusSensorCommunicator:
             
             # Read holding register (function code 3)
             # Assuming 16-bit integer value, scale by 10 for decimal precision
+            # Use sensor-specific unit_id (allows multiple sensors on same port)
             try:
                 # For pymodbus 3.x, use slave parameter instead of unit
                 # Try both methods for compatibility
                 try:
-                    result = self.client.read_holding_registers(register, 1, slave=self.unit_id)
+                    result = self.client.read_holding_registers(register, 1, slave=sensor_unit_id)
                 except TypeError:
                     # Fallback to unit parameter for older versions
-                    result = self.client.read_holding_registers(register, 1, unit=self.unit_id)
+                    result = self.client.read_holding_registers(register, 1, unit=sensor_unit_id)
             except Exception as e:
                 # Connection error - try to reconnect
                 print(f"Modbus read exception for sensor {sensor_id}: {e}")
