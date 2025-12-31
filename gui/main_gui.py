@@ -56,7 +56,7 @@ class MainWindow(QMainWindow):
         self.previous_sensor_status: Dict[int, SensorStatus] = {}
         self.max_history_points = 100
         self.plot_start_time = datetime.now()  # Track when plotting started
-        self.plot_time_window = 15  # Rolling window in seconds (10-20 seconds)
+        self.plot_time_window = 20  # Rolling window in seconds (10-20 seconds range)
         
         # Maintenance console authentication state
         self.maintenance_authenticated = False
@@ -485,9 +485,9 @@ class MainWindow(QMainWindow):
         num_sensors = len(self.sensor_configs)
         if num_sensors > 0:
             # Smaller plots - reduced height for more compact display
-            estimated_height_per_plot = max(250, 280)
+            estimated_height_per_plot = max(180, 200)
         else:
-            estimated_height_per_plot = 280
+            estimated_height_per_plot = 200
         
         # Create a plot for each sensor, stacked vertically
         for sensor_id, config in sorted(self.sensor_configs.items()):
@@ -495,12 +495,13 @@ class MainWindow(QMainWindow):
             plot_container = QWidget()
             plot_container.setProperty("plotContainer", True)
             container_layout = QVBoxLayout(plot_container)
-            container_layout.setContentsMargins(10, 10, 10, 15)  # More bottom margin for x-axis
-            container_layout.setSpacing(5)
+            container_layout.setContentsMargins(8, 8, 8, 10)  # Reduced margins for compact display
+            container_layout.setSpacing(3)
             
-            # Sensor name label - smaller font
+            # Sensor name label - smaller font and compact spacing
             sensor_label = QLabel(f"{config.name} (S{config.sensor_id:02d})")
             sensor_label.setProperty("sensorLabel", True)
+            sensor_label.setStyleSheet("font-size: 10px; margin-bottom: 2px;")  # Smaller label
             container_layout.addWidget(sensor_label)
             
             # Create plot widget with professional light theme - compact size
@@ -516,8 +517,8 @@ class MainWindow(QMainWindow):
             
             plot_widget.setMouseEnabled(x=True, y=True)  # Enable zooming
             plot_widget.showGrid(x=True, y=True, alpha=0.2)  # Subtle professional grid
-            plot_widget.setMinimumHeight(estimated_height_per_plot - 25)  # Compact plots
-            plot_widget.setMaximumHeight(estimated_height_per_plot - 25)
+            plot_widget.setMinimumHeight(estimated_height_per_plot - 40)  # Compact plots
+            plot_widget.setMaximumHeight(estimated_height_per_plot - 40)
             
             # Professional light theme plot styling
             plot_widget.getAxis('left').setPen(pg.mkPen(color='#999999', width=1.5))
@@ -530,8 +531,8 @@ class MainWindow(QMainWindow):
             plot_widget.getAxis('bottom').setTickFont(QFont('Arial', 8))
             
             # Ensure x-axis labels are visible with proper spacing
-            plot_widget.getAxis('bottom').setHeight(50)  # Increase height for x-axis labels
-            plot_widget.getAxis('left').setWidth(60)  # Ensure y-axis has enough width
+            plot_widget.getAxis('bottom').setHeight(40)  # Reduced height for compact display
+            plot_widget.getAxis('left').setWidth(50)  # Reduced width for compact display
             
             # Store plot widget reference by sensor_id
             plot_widget.setProperty("sensor_id", sensor_id)
@@ -550,7 +551,7 @@ class MainWindow(QMainWindow):
         # Calculate based on window width or use fixed pixel values
         total_width = 1400  # Default window width
         left_width = int(total_width * 0.4) + 70  # 40% for sensor status + 70 pixels (40 + 30)
-        right_width = int(total_width * 0.6) - 90  # 60% for plots - 90 pixels (40 + 50)
+        right_width = int(total_width * 0.6) - 150  # 60% for plots - 150 pixels (reduced width by 50px total)
         
         splitter.setSizes([left_width, right_width])
         
@@ -2175,9 +2176,9 @@ class MainWindow(QMainWindow):
                             range_val = config.high_limit - config.low_limit
                             padding = range_val * 0.1 if range_val > 0 else 10
                             
-                            # Set fixed y-axis range
+                            # Set fixed y-axis range with 20 units below low_limit
                             plot_widget.setYRange(
-                                config.low_limit - padding,
+                                config.low_limit - 20 - padding,
                                 config.high_limit + padding
                             )
                             
