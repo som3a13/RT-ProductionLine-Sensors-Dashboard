@@ -5,6 +5,7 @@ A comprehensive real-time monitoring and maintenance system for industrial produ
 ## 🚀 Key Features
 
 ### Core Monitoring
+
 - ✅ **Real-Time Sensor Monitoring**: Live data from multiple sensors with 2+ Hz refresh rate
 - ✅ **Multi-Protocol Support**: Serial (PTY), TCP/IP, and Modbus/TCP communication
 - ✅ **Real-Time Rolling Plots**: Per-sensor plots showing last 15 seconds of data with fixed y-axis based on sensor limits
@@ -12,6 +13,7 @@ A comprehensive real-time monitoring and maintenance system for industrial produ
 - ✅ **Global System Health**: Overall system health indicator showing Normal/Warning/Critical status
 
 ### Alarm Management
+
 - ✅ **Intelligent Alarm Detection**: Automatic detection of LOW/HIGH limits and faulty sensors (-999)
 - ✅ **Alarm Log with Limits**: Complete alarm history including low/high limits at time of alarm
 - ✅ **State Transition Notifications**: Notifications sent only on state transitions (prevents spam)
@@ -19,6 +21,7 @@ A comprehensive real-time monitoring and maintenance system for industrial produ
 - ✅ **Multiple Notification Methods**: Desktop notifications (Linux/Windows) and webhook support
 
 ### Maintenance Console
+
 - ✅ **Password-Protected Maintenance Tab**: Secure access with username/password authentication from `config.json`
 - ✅ **Comprehensive Alarm Log**: Full alarm history with timestamps, values, types, and limits
 - ✅ **System Tools**: Remote commands (self-test, snapshot, system diagnostics)
@@ -30,6 +33,7 @@ A comprehensive real-time monitoring and maintenance system for industrial produ
 - ✅ **Web-Based Remote Console**: Access from any browser with authentication
 
 ### User Interface
+
 - ✅ **Modern Light Theme**: Clean, professional interface
 - ✅ **Resizable Window**: Flexible window sizing for different screen sizes
 - ✅ **Scrollable Components**: Sensor table and plots section are scrollable for variable number of sensors
@@ -123,8 +127,10 @@ RT-ProductionLine-Sensors-Dashboard/
 ## 🛠️ Setup Steps
 
 ### Prerequisites
+
 - Python 3.8 or higher
-- Linux (Ubuntu recommended) or Windows
+- **Linux** (Ubuntu recommended): Full support with PTY for serial sensors
+- **Windows**: Full support with TCP sockets for serial sensors (automatic fallback)
 - Internet connection (for installing packages)
 
 ### Step 1: Clone/Download Project
@@ -140,6 +146,7 @@ pip install -r requirements.txt
 ```
 
 **Required Packages:**
+
 - `PyQt5==5.15.10` - GUI framework
 - `pyqtgraph==0.13.3` - Real-time plotting
 - `numpy==1.24.3` - Numerical operations
@@ -156,6 +163,7 @@ python3 scripts/verify_project.py
 ```
 
 This script verifies:
+
 - All required files exist
 - Python imports work correctly
 - Configuration is valid
@@ -178,7 +186,9 @@ See [Configuration](#-configuration) section for detailed examples.
 
 Start sensor simulators based on your configuration. You can run multiple simulators concurrently:
 
-#### Serial Sensors (PTY)
+#### Serial Sensors
+
+**Linux (PTY):**
 
 ```bash
 # Single sensor
@@ -189,13 +199,26 @@ python3 simulators/sensor_serial.py \
   --config "temperature:1:115200:8N1" \
   --config "pressure:2:115200:8N1" \
   --config "flow:3:115200:8N1"
-
-# Or run in separate terminals
-python3 simulators/sensor_serial.py --config "temperature:1:115200:8N1"
-python3 simulators/sensor_serial.py --config "pressure:2:115200:8N1"
 ```
 
-**Important:** Note the PTY path printed when serial simulators start (e.g., `PTY device: /dev/pts/9`) and update `config/config.json` with the correct paths.
+**Windows (COM Port - Required):**
+
+```cmd
+# Single sensor with COM port (COM port is REQUIRED)
+python simulators\sensor_serial.py --config "temperature:1:115200:8N1" --com-port COM10
+
+# Multiple sensors (each needs its own COM port)
+python simulators\sensor_serial.py --config "temperature:1:115200:8N1" --com-port COM10
+python simulators\sensor_serial.py --config "pressure:2:115200:8N1" --com-port COM11
+
+# For virtual COM ports, install com0com to create COM port pairs
+# If --com-port is not specified, the simulator will error and require it
+```
+
+**Important:**
+
+- **Linux**: Note the PTY path printed when serial simulators start (e.g., `Device: /dev/pts/9`) and update `config/config.json` with the correct paths.
+- **Windows (COM Port - Required)**: COM port is **required** on Windows. Use `--com-port COM10` to specify a COM port. Use the same COM port in `config/config.json` (e.g., `"port": "COM10"`). For virtual COM ports, install `com0com`.
 
 #### TCP Sensors
 
@@ -234,6 +257,7 @@ python3 main.py
 ```
 
 The GUI application will:
+
 - Load sensor configurations from `config/config.json`
 - Start the Remote Console WebSocket server (port 8765)
 - Start the HTTP server for web interface (port 8080)
@@ -249,6 +273,7 @@ The GUI application will:
 ### Step 5: Access Features
 
 #### Desktop Application
+
 - **Dashboard Tab**: Real-time sensor monitoring with plots and status table
 - **Maintenance Console Tab**: Password-protected access to:
   - Alarm Log (with low/high limits)
@@ -256,6 +281,7 @@ The GUI application will:
   - Live Log Viewer (real-time system logs)
 
 #### Web Interface
+
 1. Open your browser: `http://localhost:8080/remote_console_client.html`
 2. Login with credentials from `config.json`:
    - **Admin**: `admin` / `admin123` (full access)
@@ -268,6 +294,7 @@ The GUI application will:
 Edit `config/config.json` to configure:
 
 ### Sensors
+
 ```json
 {
   "sensors": [
@@ -291,6 +318,7 @@ Edit `config/config.json` to configure:
 ```
 
 ### Alarm Settings
+
 ```json
 {
   "alarm_settings": {
@@ -302,6 +330,7 @@ Edit `config/config.json` to configure:
 ```
 
 ### Remote Console Users
+
 ```json
 {
   "remote_console": {
@@ -324,18 +353,21 @@ Edit `config/config.json` to configure:
 ### Dashboard Features
 
 1. **Sensor Status Table** (Left Panel)
+
    - Real-time sensor readings
    - Color-coded rows (Green: OK, Yellow: Alarm, Red: Faulty)
    - Columns: ID, Sensor Name, Latest Value, Unit, Timestamp, Status
    - Scrollable for variable number of sensors
 
 2. **Real-Time Plots** (Right Panel)
+
    - Individual plot per sensor
    - Rolling 15-second window
    - Fixed y-axis based on sensor limits
    - Scrollable for multiple sensors
 
 3. **Global System Health Indicator**
+
    - Overall system status (Normal/Warning/Critical)
    - Located beside Connect/Disconnect button
    - Color-coded status display
@@ -347,17 +379,20 @@ Edit `config/config.json` to configure:
 ### Maintenance Console Features
 
 1. **Authentication**
+
    - Username/password from `config.json`
    - Content hidden until authenticated
    - Secure access to sensitive features
 
 2. **Alarm Log Tab**
+
    - Complete alarm history
    - Columns: Time, Sensor Name, Value, Alarm Type, Low Limit, High Limit, Unit
    - Export to CSV functionality
    - Clear log functionality
 
 3. **System Tools Tab**
+
    - Run Self-Test: System diagnostics
    - Get Snapshot: Detailed system state
    - Results displayed in formatted text
@@ -399,11 +434,17 @@ Edit `config/config.json` to configure:
 
 ## 📡 Protocol Descriptions
 
-### Serial Communication (PTY)
+### Serial Communication
 
-**Protocol:** Serial over Pseudo-Terminal (PTY)
+**Protocol:**
+
+- **Linux**: Serial over Pseudo-Terminal (PTY) - creates `/dev/pts/X` devices
+- **Windows**: COM ports (e.g., COM10, COM1) - COM port is required, use `--com-port COM10`
+
+**Platform Detection:** The simulator automatically detects the platform and uses the appropriate method.
 
 **Configuration:**
+
 - Baudrate: 115200 (configurable, default: 115200)
 - Data bits: 8
 - Parity: None (N)
@@ -411,6 +452,7 @@ Edit `config/config.json` to configure:
 - Frame format: JSON terminated by newline (`\n`)
 
 **Frame Format:**
+
 ```json
 {
   "sensor_id": 1,
@@ -423,6 +465,7 @@ Edit `config/config.json` to configure:
 ```
 
 **How It Works:**
+
 1. Simulator creates a PTY pair (master/slave)
 2. Simulator writes JSON frames to master file descriptor
 3. Application connects to slave device (e.g., `/dev/pts/9`)
@@ -430,11 +473,13 @@ Edit `config/config.json` to configure:
 5. Frames are parsed and converted to `SensorReading` objects
 
 **Example Frame (Single Line):**
+
 ```
 {"sensor_id":1,"sensor_name":"Temperature Sensor 1","value":45.5,"timestamp":"2025-01-15T12:00:00","status":"OK","unit":"°C"}\n
 ```
 
 **Worker Thread Model:**
+
 - One worker thread per unique serial port
 - Multiple sensors on the same port share one worker thread
 - Example: 3 sensors on 3 different ports = 3 worker threads
@@ -447,12 +492,14 @@ Edit `config/config.json` to configure:
 **Protocol:** TCP/IP Socket
 
 **Configuration:**
+
 - Host: localhost (configurable)
 - Port: 5000, 5001, etc. (configurable)
 - Frame format: JSON terminated by newline (`\n`)
 
 **Frame Format:**
 Same as Serial (JSON):
+
 ```json
 {
   "sensor_id": 3,
@@ -465,6 +512,7 @@ Same as Serial (JSON):
 ```
 
 **How It Works:**
+
 1. TCP server is created on specified port (e.g., 5000)
 2. Multiple sensor clients connect to the same server
 3. Application connects as TCP client to the server
@@ -472,16 +520,19 @@ Same as Serial (JSON):
 5. Application reads frames terminated by newline and parses them
 
 **Architecture:**
+
 - **TCP Server**: Central server that accepts multiple sensor client connections
 - **TCP Clients**: Individual sensor simulators that connect to the server
 - **Application**: Connects to server and receives data from all sensors
 
 **Example Frame (Single Line):**
+
 ```
 {"sensor_id":3,"sensor_name":"Flow Rate Sensor 1","value":75.2,"timestamp":"2025-01-15T12:00:00","status":"OK","unit":"L/min"}\n
 ```
 
 **Worker Thread Model:**
+
 - One worker thread per unique TCP server (host:port combination)
 - Multiple sensors connecting to the same server share one worker thread
 - Example: 4 sensors on 2 different servers = 2 worker threads
@@ -494,6 +545,7 @@ Same as Serial (JSON):
 **Protocol:** Modbus/TCP (Function Code 3 - Read Holding Registers)
 
 **Configuration:**
+
 - Host: localhost (configurable)
 - Port: 1502 (default Modbus port, configurable)
 - Unit ID: 1 (configurable)
@@ -503,6 +555,7 @@ Same as Serial (JSON):
 **Frame Format (Modbus/TCP):**
 
 **Request Frame (Application → Sensor):**
+
 ```
 MBAP Header (7 bytes):
   - Transaction ID (2 bytes): 0x0001
@@ -517,6 +570,7 @@ PDU (Protocol Data Unit, 5 bytes):
 ```
 
 **Response Frame (Sensor → Application):**
+
 ```
 MBAP Header (7 bytes):
   - Transaction ID (2 bytes): 0x0001
@@ -531,6 +585,7 @@ PDU (Protocol Data Unit):
 ```
 
 **Value Encoding:**
+
 - Values stored as 16-bit integers (0-65535)
 - Scaled by 10 for decimal precision
 - Example: 455 = 45.5, 2205 = 220.5
@@ -538,6 +593,7 @@ PDU (Protocol Data Unit):
 - Example: -999.0 = 65536 - 9990 = 55546 (0xD8FA)
 
 **How It Works:**
+
 1. Modbus/TCP server is created on specified port (e.g., 1502)
 2. Application connects as Modbus client
 3. Application sends Function Code 3 requests (Read Holding Registers)
@@ -546,6 +602,7 @@ PDU (Protocol Data Unit):
 6. Example: Register value 455 → Float value 45.5
 
 **Worker Thread Model:**
+
 - One worker thread per unique Modbus server (host:port combination)
 - Multiple sensors on the same server share one worker thread
 - Example: 2 sensors on 2 different servers = 2 worker threads
@@ -555,15 +612,16 @@ PDU (Protocol Data Unit):
 
 ### Protocol Comparison
 
-| Protocol | Frame Format | Termination | Encoding | Worker Threads |
-|----------|--------------|-------------|----------|----------------|
-| **Serial (PTY)** | JSON | Newline (`\n`) | Text | One per unique port |
-| **TCP/IP** | JSON | Newline (`\n`) | Text | One per unique host:port |
-| **Modbus/TCP** | Binary (MBAP + PDU) | TCP packet | 16-bit integer × 10 | One per unique host:port |
+| Protocol         | Frame Format        | Termination    | Encoding            | Worker Threads           |
+| ---------------- | ------------------- | -------------- | ------------------- | ------------------------ |
+| **Serial (PTY)** | JSON                | Newline (`\n`) | Text                | One per unique port      |
+| **TCP/IP**       | JSON                | Newline (`\n`) | Text                | One per unique host:port |
+| **Modbus/TCP**   | Binary (MBAP + PDU) | TCP packet     | 16-bit integer × 10 | One per unique host:port |
 
 ### Common Features
 
 All protocols support:
+
 - Multiple sensors per communication endpoint
 - Real-time data streaming
 - Automatic reconnection on failure
@@ -581,6 +639,7 @@ The system provides a WebSocket-based API for remote access to sensor data, alar
 
 **Authentication:**
 All connections require authentication before accessing commands:
+
 ```json
 {
   "type": "auth",
@@ -592,6 +651,7 @@ All connections require authentication before accessing commands:
 **Available Commands:**
 
 1. **`get_status`** - Get system status summary
+
    ```json
    {
      "type": "command",
@@ -600,6 +660,7 @@ All connections require authentication before accessing commands:
    ```
 
 2. **`get_sensors`** - Get all sensor readings
+
    ```json
    {
      "type": "command",
@@ -608,6 +669,7 @@ All connections require authentication before accessing commands:
    ```
 
 3. **`get_alarms`** - Get alarm log entries (includes low_limit and high_limit)
+
    ```json
    {
      "type": "command",
@@ -617,6 +679,7 @@ All connections require authentication before accessing commands:
    ```
 
 4. **`clear_alarms`** - Clear alarm log (requires `write` permission)
+
    ```json
    {
      "type": "command",
@@ -625,6 +688,7 @@ All connections require authentication before accessing commands:
    ```
 
 5. **`get_logs`** - Get system log entries
+
    ```json
    {
      "type": "command",
@@ -634,6 +698,7 @@ All connections require authentication before accessing commands:
    ```
 
 6. **`run_self_test`** - Run system diagnostics (requires `commands` permission)
+
    ```json
    {
      "type": "command",
@@ -642,6 +707,7 @@ All connections require authentication before accessing commands:
    ```
 
 7. **`get_snapshot`** - Get detailed system snapshot
+
    ```json
    {
      "type": "command",
@@ -661,12 +727,14 @@ All connections require authentication before accessing commands:
    ```
 
 **User Permissions:**
+
 - **read**: View sensor data and alarms
 - **write**: Clear alarms, modify settings
 - **commands**: Execute system commands (self-test, snapshot)
 
 **Response Format:**
 All responses are JSON messages with a `type` field indicating the response type:
+
 - `status` - System status response
 - `sensors` - Sensor data response
 - `alarms` - Alarm log response
@@ -679,6 +747,7 @@ All responses are JSON messages with a `type` field indicating the response type
 ### Detailed API Documentation
 
 For complete API documentation, see:
+
 - **`api/API_DOCUMENTATION.md`** - Detailed markdown API documentation with examples
 - **`api/openapi.yaml`** - OpenAPI 3.0 specification
 
@@ -693,6 +762,7 @@ python3 scripts/serve_api_docs.py
 Then open: `http://localhost:8081/`
 
 This provides:
+
 - Visual API explorer
 - Test endpoints directly from browser
 - Request/response examples
@@ -772,6 +842,7 @@ This project is part of the Si-Ware Production Line Monitoring System.
 ## 👥 Support
 
 For detailed information, refer to:
+
 - `Project_Documentation.md` - Complete system documentation
 - `Project_Documentation.pdf` - PDF version
 - `tests/README.md` - Unit tests documentation
@@ -782,4 +853,4 @@ For detailed information, refer to:
 
 ---
 
-*Last Updated: January 2025*
+_Last Updated: January 2025_

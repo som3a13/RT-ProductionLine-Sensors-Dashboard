@@ -1,18 +1,27 @@
 """
-Unified Serial Sensor Simulator (PTY-based)
+Unified Serial Sensor Simulator (PTY-based on Linux, COM port on Windows)
 Supports multiple sensor types: temperature, pressure, flow, vibration, voltage
-Uses PTY (pseudo-terminal) to create a fake serial port
+- Linux: Uses PTY (pseudo-terminal) to create a fake serial port
+- Windows: Uses COM ports or TCP socket for simulation
 Configurable baudrate and serial parameters (8N1)
 """
-import pty
 import os
+import sys
 import time
 import json
 import random
-import sys
-import termios
 import threading
+import platform
 from datetime import datetime
+
+# Platform-specific imports
+IS_WINDOWS = platform.system() == "Windows"
+if not IS_WINDOWS:
+    import pty
+    import termios
+else:
+    # Windows: Use COM port
+    import serial
 
 
 class TrendBasedGenerator:
@@ -96,11 +105,16 @@ def get_defaults_for_type(sensor_type: str):
 
 
 class SerialSensorSimulator:
-    """PTY-based simulator for serial sensors (Temperature, Pressure, etc.)"""
+    """
+    Cross-platform simulator for serial sensors (Temperature, Pressure, etc.)
+    - Linux: Uses PTY (pseudo-terminal)
+    - Windows: Uses TCP socket or COM port
+    """
     
     def __init__(self, sensor_id=1, sensor_type='temperature', 
                  low_limit=None, high_limit=None, unit=None,
-                 baudrate=115200, bytesize=8, parity='N', stopbits=1):
+                 baudrate=115200, bytesize=8, parity='N', stopbits=1,
+                 com_port=None):
         """
         Initialize sensor simulator
         
@@ -114,6 +128,7 @@ class SerialSensorSimulator:
             bytesize: Data bits (default: 8)
             parity: Parity ('N' for None, 'E' for Even, 'O' for Odd)
             stopbits: Stop bits (1 or 2)
+            com_port: COM port name for Windows (e.g., 'COM10', 'COM1'). If None, uses TCP fallback.
         """
         self.baudrate = baudrate
         self.bytesize = bytesize
@@ -122,6 +137,8 @@ class SerialSensorSimulator:
         self.running = False
         self.master_fd = None
         self.slave_name = None
+        self.com_port = com_port  # For Windows COM port mode
+        self.serial_conn = None  # For Windows COM port mode
         
         # Get defaults for sensor type
         defaults = get_defaults_for_type(sensor_type)
@@ -147,22 +164,37 @@ class SerialSensorSimulator:
         self.frame_format = "JSON"  # This sensor uses JSON frame format
         
     def create_pty(self):
-        """Create PTY pair and configure serial parameters"""
+        """
+        Create serial port interface (PTY on Linux, COM port on Windows)
+        Returns the port/address that the application should connect to
+        """
+        if IS_WINDOWS:
+            # Windows: COM port is required
+            if not self.com_port:
+                print("Error: COM port is required on Windows. Please specify --com-port COM10 (or COM1, COM2, etc.)")
+                print("For virtual COM ports, install com0com to create COM port pairs.")
+                return None
+            return self._create_windows_com_port()
+        else:
+            # Linux: Use PTY (pseudo-terminal)
+            return self._create_linux_pty()
+    
+    def _create_linux_pty(self):
+        """Create PTY pair on Linux and configure serial parameters"""
         try:
             # Create PTY pair
             master_fd, slave_fd = pty.openpty()
             self.slave_name = os.ttyname(slave_fd)
             
             # Configure PTY with serial parameters
-            # Set baudrate and other serial parameters on the master side
             try:
                 # Get current terminal attributes
                 attrs = termios.tcgetattr(master_fd)
                 
                 # Set baudrate
                 if self.baudrate == 115200:
-                    attrs[4] = termios.B115200  # Input speed
-                    attrs[5] = termios.B115200  # Output speed
+                    attrs[4] = termios.B115200
+                    attrs[5] = termios.B115200
                 elif self.baudrate == 9600:
                     attrs[4] = termios.B9600
                     attrs[5] = termios.B9600
@@ -176,12 +208,11 @@ class SerialSensorSimulator:
                     attrs[4] = termios.B57600
                     attrs[5] = termios.B57600
                 else:
-                    # Default to 115200 if not supported
                     attrs[4] = termios.B115200
                     attrs[5] = termios.B115200
                 
                 # Set data bits, parity, stop bits
-                attrs[2] &= ~termios.CSIZE  # Clear current size
+                attrs[2] &= ~termios.CSIZE
                 if self.bytesize == 8:
                     attrs[2] |= termios.CS8
                 elif self.bytesize == 7:
@@ -192,11 +223,11 @@ class SerialSensorSimulator:
                     attrs[2] |= termios.CS5
                 
                 # Set parity
-                attrs[2] &= ~(termios.PARENB | termios.PARODD)  # Clear parity
+                attrs[2] &= ~(termios.PARENB | termios.PARODD)
                 if self.parity == 'E':
-                    attrs[2] |= termios.PARENB  # Enable parity
+                    attrs[2] |= termios.PARENB
                 elif self.parity == 'O':
-                    attrs[2] |= termios.PARENB | termios.PARODD  # Odd parity
+                    attrs[2] |= termios.PARENB | termios.PARODD
                 
                 # Set stop bits
                 if self.stopbits == 2:
@@ -208,10 +239,9 @@ class SerialSensorSimulator:
                 termios.tcsetattr(master_fd, termios.TCSANOW, attrs)
             except Exception as e:
                 print(f"Warning: Could not set serial parameters: {e}")
-                print("PTY will use default parameters")
             
             self.master_fd = master_fd
-            os.close(slave_fd)  # Close slave FD, we only need master for writing
+            os.close(slave_fd)
             
             print(f"✓ Created PTY for {self.sensor_name}")
             print(f"  Device: {self.slave_name}")
@@ -219,13 +249,61 @@ class SerialSensorSimulator:
             print(f"  Sensor Type: {self.sensor_type}")
             print(f"  Limits: {self.low_limit} - {self.high_limit} {self.unit}")
             print(f"  Baudrate: {self.baudrate}")
-            print(f"  Serial Parameters: {self.bytesize}{self.parity}{self.stopbits} (8N1)")
+            print(f"  Serial Parameters: {self.bytesize}{self.parity}{self.stopbits}")
             print(f"  Frame Format: {self.frame_format}")
             
             return self.slave_name
         except Exception as e:
             print(f"Failed to create PTY: {e}")
             return None
+    
+    def _create_windows_com_port(self):
+        """Create/use COM port on Windows"""
+        try:
+            import serial
+            
+            # Normalize COM port name (COM10, COM1, etc.)
+            com_name = self.com_port.upper()
+            if not com_name.startswith('COM'):
+                com_name = f'COM{com_name}'
+            
+            # Try to open the COM port
+            try:
+                self.serial_conn = serial.Serial(
+                    port=com_name,
+                    baudrate=self.baudrate,
+                    bytesize=self.bytesize,
+                    parity=self.parity,
+                    stopbits=self.stopbits,
+                    timeout=1.0,
+                    write_timeout=1.0
+                )
+                
+                self.slave_name = com_name
+                
+                print(f"✓ Using COM port for {self.sensor_name}")
+                print(f"  Port: {com_name}")
+                print(f"  Sensor ID: {self.sensor_id}")
+                print(f"  Sensor Type: {self.sensor_type}")
+                print(f"  Limits: {self.low_limit} - {self.high_limit} {self.unit}")
+                print(f"  Baudrate: {self.baudrate}")
+                print(f"  Serial Parameters: {self.bytesize}{self.parity}{self.stopbits}")
+                print(f"  Frame Format: {self.frame_format}")
+                print(f"  Note: Use '{com_name}' as the port in config.json")
+                
+                return self.slave_name
+            except serial.SerialException as e:
+                print(f"Error: Could not open COM port {com_name}: {e}")
+                print(f"  Make sure the COM port exists and is not in use by another application.")
+                print(f"  For virtual COM ports, install 'com0com' or similar virtual serial port driver.")
+                return None
+        except ImportError:
+            print("Error: pyserial not installed. Install with: pip install pyserial")
+            return None
+        except Exception as e:
+            print(f"Failed to create COM port: {e}")
+            return None
+    
     
     def generate_sensor_value(self) -> float:
         """Generate a realistic trend-based sensor value"""
@@ -255,11 +333,21 @@ class SerialSensorSimulator:
         return frame.encode('utf-8')
     
     def run(self):
-        """Main loop - sends sensor data"""
-        if not self.master_fd:
-            print("Error: PTY not created. Call create_pty() first.")
-            return
-        
+        """Main loop - sends sensor data (platform-specific)"""
+        if IS_WINDOWS:
+            if self.com_port and self.serial_conn:
+                self._run_windows_com()
+            else:
+                print("Error: COM port not created. Call create_pty() first.")
+                return
+        else:
+            if not self.master_fd:
+                print("Error: PTY not created. Call create_pty() first.")
+                return
+            self._run_linux_pty()
+    
+    def _run_linux_pty(self):
+        """Run on Linux using PTY"""
         self.running = True
         print(f"\n{self.sensor_name} simulator running...")
         print("Press Ctrl+C to stop.\n")
@@ -280,14 +368,53 @@ class SerialSensorSimulator:
             print(f"Error: {e}")
             self.stop()
     
+    def _run_windows_com(self):
+        """Run on Windows using COM port"""
+        import serial
+        self.running = True
+        print(f"\n{self.sensor_name} simulator running on {self.com_port}...")
+        print("Press Ctrl+C to stop.\n")
+        
+        try:
+            while self.running:
+                if self.serial_conn and self.serial_conn.is_open:
+                    value = self.generate_sensor_value()
+                    frame = self.create_working_frame(value)
+                    
+                    try:
+                        self.serial_conn.write(frame)
+                    except serial.SerialTimeoutException:
+                        print("Warning: Serial write timeout")
+                    except serial.SerialException as e:
+                        print(f"Serial error: {e}")
+                        break
+                else:
+                    print("Error: COM port is not open")
+                    break
+                
+                time.sleep(0.5)  # Update every 0.5 seconds
+        except KeyboardInterrupt:
+            print("\n\nStopping simulator...")
+            self.stop()
+        except Exception as e:
+            print(f"Error: {e}")
+            self.stop()
+    
+    
     def stop(self):
         """Stop the simulator"""
         self.running = False
-        if self.master_fd:
+        if not IS_WINDOWS and self.master_fd:
             try:
                 os.close(self.master_fd)
             except:
                 pass
+        if IS_WINDOWS:
+            if self.serial_conn and self.serial_conn.is_open:
+                try:
+                    self.serial_conn.close()
+                except:
+                    pass
         print(f"{self.sensor_name} simulator stopped.")
 
 
@@ -350,23 +477,29 @@ def main():
     import argparse
     
     parser = argparse.ArgumentParser(
-        description='Unified Serial Sensor PTY Simulator',
+        description='Unified Serial Sensor Simulator (PTY on Linux, COM port on Windows)',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Using simplified config string (limits and unit are optional):
-  python sensor_serial.py --config "flow:3:115200:8N1"
-  python sensor_serial.py --config "flow:3:115200:8N1:10:100"
-  python sensor_serial.py --config "flow:3:115200:8N1:10:100:L/min"
-  python sensor_serial.py --config "temperature:1:9600:8E1"
+  # Linux: Using simplified config string (limits and unit are optional):
+  python3 sensor_serial.py --config "flow:3:115200:8N1"
+  python3 sensor_serial.py --config "flow:3:115200:8N1:10:100"
+  python3 sensor_serial.py --config "flow:3:115200:8N1:10:100:L/min"
+  python3 sensor_serial.py --config "temperature:1:9600:8E1"
   
-  # Running multiple sensors at once:
-  python sensor_serial.py --config "flow:1:115200:8N1" --config "pressure:2:115200:8N1"
-  python sensor_serial.py --config "temperature:1:115200:8N1" --config "flow:3:9600:8N1" --config "pressure:4:19200:8N1"
+  # Linux: Running multiple sensors at once:
+  python3 sensor_serial.py --config "flow:1:115200:8N1" --config "pressure:2:115200:8N1"
+  python3 sensor_serial.py --config "temperature:1:115200:8N1" --config "flow:3:9600:8N1" --config "pressure:4:19200:8N1"
   
-  # Using individual arguments (single sensor only):
-  python sensor_serial.py --sensor-id 1 --sensor-type temperature
-  python sensor_serial.py --sensor-id 2 --sensor-type pressure --low-limit 40.0 --high-limit 160.0
+  # Linux: Using individual arguments (single sensor only):
+  python3 sensor_serial.py --sensor-id 1 --sensor-type temperature
+  python3 sensor_serial.py --sensor-id 2 --sensor-type pressure --low-limit 40.0 --high-limit 160.0
+  
+  # Windows: COM port is REQUIRED (e.g., COM10, COM1):
+  python sensor_serial.py --config "temperature:1:115200:8N1" --com-port COM10
+  python sensor_serial.py --sensor-id 1 --sensor-type temperature --com-port COM1
+  
+  # Windows: For virtual COM ports, install com0com to create COM port pairs
         """
     )
     
@@ -392,6 +525,9 @@ Examples:
     parser.add_argument('--bytesize', type=int, default=8, choices=[5, 6, 7, 8], help='Data bits (default: 8)')
     parser.add_argument('--parity', type=str, default='N', choices=['N', 'E', 'O'], help='Parity (default: N)')
     parser.add_argument('--stopbits', type=int, default=1, choices=[1, 2], help='Stop bits (default: 1)')
+    parser.add_argument('--com-port', type=str, default=None,
+                        help='COM port name for Windows (REQUIRED on Windows, e.g., COM10, COM1).\n'
+                             'For virtual COM ports, install com0com or similar virtual serial port driver.')
     
     args = parser.parse_args()
     
@@ -412,7 +548,8 @@ Examples:
                     baudrate=config['baudrate'],
                     bytesize=config['bytesize'],
                     parity=config['parity'],
-                    stopbits=config['stopbits']
+                    stopbits=config['stopbits'],
+                    com_port=args.com_port
                 )
                 simulators.append(simulator)
             except ValueError as e:
@@ -429,7 +566,8 @@ Examples:
             baudrate=args.baudrate,
             bytesize=args.bytesize,
             parity=args.parity,
-            stopbits=args.stopbits
+            stopbits=args.stopbits,
+            com_port=args.com_port
         )
         simulators.append(simulator)
     

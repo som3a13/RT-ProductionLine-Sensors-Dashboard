@@ -57,3 +57,9 @@ class NonResizableSplitter(QSplitter):
         return super().eventFilter(obj, event)
 
 
+
+
+
+
+
+

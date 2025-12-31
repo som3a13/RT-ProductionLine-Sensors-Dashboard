@@ -13,3 +13,9 @@ class AlarmClearHelper(QObject):
         self.clear_requested.connect(target_method)
 
 
+
+
+
+
+
+
