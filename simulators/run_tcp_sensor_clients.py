@@ -136,7 +136,7 @@ class GenericTCPSensorClient:
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.socket.settimeout(5.0)
             self.socket.connect((self.server_host, self.server_port))
-            print(f"✓ {self.sensor_name} connected to {self.server_host}:{self.server_port}")
+            print(f"[OK] {self.sensor_name} connected to {self.server_host}:{self.server_port}")
             return True
         except Exception as e:
             print(f"✗ {self.sensor_name} connection error: {e}")

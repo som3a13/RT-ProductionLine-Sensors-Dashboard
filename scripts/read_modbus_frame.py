@@ -27,7 +27,7 @@ class ModbusFrameReader:
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.sock.settimeout(5.0)
             self.sock.connect((self.host, self.port))
-            print(f"✓ Connected to Modbus server at {self.host}:{self.port}\n")
+            print(f"[OK] Connected to Modbus server at {self.host}:{self.port}\n")
             return True
         except Exception as e:
             print(f"✗ Connection error: {e}")

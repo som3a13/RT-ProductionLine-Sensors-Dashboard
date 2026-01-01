@@ -91,7 +91,7 @@ class ModbusSensorCommunicator:
             for attempt in range(max_retries):
                 connection_result = self.client.connect()
                 if connection_result:
-                    print(f"✓ Modbus connected successfully to {self.host}:{self.port}")
+                    print(f"[OK] Modbus connected successfully to {self.host}:{self.port}")
                     self.running = True
                     self.worker_thread = threading.Thread(target=self._worker_loop, daemon=True)
                     self.worker_thread.start()

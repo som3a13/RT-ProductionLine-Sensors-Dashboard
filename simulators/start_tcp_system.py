@@ -113,7 +113,7 @@ Sensor Specification Format:
         server_threads.append(thread)
         time.sleep(0.3)  # Small delay between server starts
     
-    print(f"✓ {len(servers)} TCP server(s) starting...")
+    print(f"[OK] {len(servers)} TCP server(s) starting...")
     print(f"  Waiting {args.delay} seconds for servers to initialize...\n")
     time.sleep(args.delay)
     
@@ -165,7 +165,7 @@ Sensor Specification Format:
                 print(f"✗ Failed to start {sensor.sensor_name}")
         
         if started:
-            print(f"✓ {len(started)} sensor(s) connected and running\n")
+            print(f"[OK] {len(started)} sensor(s) connected and running\n")
     
     print("=" * 70)
     print("System Status: RUNNING")

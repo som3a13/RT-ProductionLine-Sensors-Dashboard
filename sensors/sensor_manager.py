@@ -84,7 +84,7 @@ class SensorManager(QObject):
                 # Verify the config was added
                 with comm.lock:
                     if sensor_id in comm.sensor_configs:
-                        print(f"  ✓ Verified: sensor_id={sensor_id} is in communicator configs")
+                        print(f"  [OK] Verified: sensor_id={sensor_id} is in communicator configs")
                     else:
                         print(f"  ✗ ERROR: sensor_id={sensor_id} NOT found in communicator configs! Available: {list(comm.sensor_configs.keys())}")
                 

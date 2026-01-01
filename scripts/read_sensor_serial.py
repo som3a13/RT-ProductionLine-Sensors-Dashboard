@@ -74,7 +74,7 @@ def read_sensor_data(port, baudrate=115200, bytesize=8, parity='N', stopbits=1):
         print("=" * 80)
         print("Serial Sensor Frame Reader")
         print("=" * 80)
-        print(f"✓ Connected to {port}")
+        print(f"[OK] Connected to {port}")
         print(f"  Baudrate: {baudrate}, Serial: {bytesize}{parity}{stopbits}")
         print(f"\nReading sensor frames... (Press Ctrl+C to stop)")
         print("Each frame will show:")

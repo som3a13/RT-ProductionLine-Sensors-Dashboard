@@ -45,6 +45,7 @@ The **Production Line Remote Maintenance Console** is a comprehensive real-time 
 ### Supported Protocols
 
 1. **Serial Communication (PTY)**: Supports multiple sensors using pseudo-terminals
+
    - Configurable baudrate (default: 115200)
    - 8N1 configuration (8 data bits, No parity, 1 stop bit)
    - JSON frame format
@@ -54,6 +55,7 @@ The **Production Line Remote Maintenance Console** is a comprehensive real-time 
      - Example: 5 sensors on 2 ports (3 on port A, 2 on port B) = 2 worker threads
 
 2. **TCP/IP Communication**: Supports multiple sensors using TCP sockets
+
    - JSON frame format
    - Configurable host and port
    - **Worker Thread Model**: One worker thread per unique TCP server (host:port)
@@ -81,19 +83,19 @@ The following diagrams provide visual representations of the system architecture
 
 ![System Architecture](SYSTEM_ARCHITECTURE.png)
 
-*Complete system architecture showing all components organized into logical layers: Sensor Simulators, Communication Layer, Management Layer, GUI Application, Remote Console, and Notification System. Components are color-coded and grouped for clarity.*
+_Complete system architecture showing all components organized into logical layers: Sensor Simulators, Communication Layer, Management Layer, GUI Application, Remote Console, and Notification System. Components are color-coded and grouped for clarity._
 
 #### Data Flow Diagram
 
 ![Data Flow](DATA_FLOW.png)
 
-*Data flow sequence showing how sensor data moves through the system from simulators to GUI and remote console, with numbered processing steps (1-6).*
+_Data flow sequence showing how sensor data moves through the system from simulators to GUI and remote console, with numbered processing steps (1-6)._
 
 #### Startup Sequence Diagram
 
 ![Startup Sequence](STARTUP_SEQUENCE.png)
 
-*System startup flowchart showing the phased initialization process from user launch through component setup, server startup, to system running state.*
+_System startup flowchart showing the phased initialization process from user launch through component setup, server startup, to system running state._
 
 ### Text-Based Architecture Overview
 
@@ -153,6 +155,7 @@ The system uses a **thread-safe architecture** with the following principles:
 5. **Locking**: Thread locks protect shared data structures
 
 **Thread Flow:**
+
 ```
 Worker Thread → Reading Received → Signal Emitted → GUI Thread Receives → GUI Updated
 ```
@@ -161,13 +164,10 @@ Worker Thread → Reading Received → Signal Emitted → GUI Thread Receives �
 
 - **Scenario 1**: 5 serial sensors on 5 different ports
   - Result: 5 worker threads (one per port)
-  
 - **Scenario 2**: 5 serial sensors on 2 ports (3 on `/dev/pts/7`, 2 on `/dev/pts/9`)
   - Result: 2 worker threads (one per port, sensors share workers)
-  
 - **Scenario 3**: 4 TCP sensors on 2 servers (2 sensors on `localhost:5000`, 2 on `localhost:5001`)
   - Result: 2 worker threads (one per server)
-  
 - **Scenario 4**: Mixed setup with 3 serial (2 ports), 4 TCP (2 servers), 2 Modbus (1 server)
   - Result: 2 + 2 + 1 = 5 total worker threads
 
@@ -189,6 +189,7 @@ pip install -r requirements.txt
 ```
 
 **Required Packages:**
+
 - `PyQt5==5.15.10` - GUI framework
 - `pyqtgraph==0.13.3` - Real-time plotting
 - `numpy==1.24.3` - Numerical operations
@@ -207,6 +208,7 @@ python3 scripts/verify_project.py
 ```
 
 This script checks:
+
 - All required files exist
 - Python imports work correctly
 - Configuration is valid
@@ -217,12 +219,14 @@ This script checks:
 The system requires sensor simulators to be running. Start them in separate terminals:
 
 **Option 1: Start All Sensors (Recommended)**
+
 ```bash
 ./scripts/run_all_sensors.sh
 ```
 
 **Option 2: Start Individual Sensors**
-```bash
+
+````bash
 # Example: Starting multiple serial sensors
 # Terminal 1 - Serial Sensor 1 (Temperature, Serial/PTY)
 python3 simulators/sensor_1.py
@@ -253,7 +257,7 @@ python3 simulators/sensor_serial.py \
 # Or run in separate terminals
 python3 simulators/sensor_serial.py --config "temperature:1:115200:8N1"
 python3 simulators/sensor_serial.py --config "pressure:2:115200:8N1"
-```
+````
 
 **Note:** For Serial sensors, note the PTY device path printed when they start (e.g., `/dev/pts/9`). Update `config/config.json` with the correct paths.
 
@@ -264,11 +268,13 @@ python3 main.py
 ```
 
 Or use the convenience script:
+
 ```bash
 ./scripts/run_app.sh
 ```
 
 The GUI application will start and automatically:
+
 - Start the Remote Console WebSocket server (port 8765)
 - Start the HTTP server for web interface (port 8080)
 - Load sensor configurations from `config/config.json`
@@ -276,11 +282,13 @@ The GUI application will start and automatically:
 ### Step 5: Access Remote Console (Optional)
 
 Once the main application is running, open your browser:
+
 ```
 http://localhost:8080/remote_console_client.html
 ```
 
 Default credentials:
+
 - **Admin**: `admin` / `admin123` (full access)
 - **Operator**: `operator` / `operator123` (read-only)
 - **Viewer**: `viewer` / `viewer123` (read-only)
@@ -379,14 +387,18 @@ RT-ProductionLine-Sensors-Dashboard/
 ### 1. Core Data Models (`core/sensor_data.py`)
 
 #### SensorStatus (Enum)
+
 Represents the status of a sensor reading:
+
 - `OK` - Value within normal limits
 - `LOW_ALARM` - Value below low limit
 - `HIGH_ALARM` - Value above high limit
 - `FAULTY` - Sensor is faulty (value = -999.0)
 
 #### SensorReading (Dataclass)
+
 Represents a single sensor reading:
+
 ```python
 @dataclass
 class SensorReading:
@@ -399,7 +411,9 @@ class SensorReading:
 ```
 
 #### AlarmEvent (Dataclass)
+
 Represents an alarm event:
+
 ```python
 @dataclass
 class AlarmEvent:
@@ -414,17 +428,19 @@ class AlarmEvent:
 ```
 
 #### SensorConfig (Class)
+
 Configuration for a sensor with alarm limits:
+
 ```python
 class SensorConfig:
-    def __init__(self, name: str, sensor_id: int, 
+    def __init__(self, name: str, sensor_id: int,
                  low_limit: float, high_limit: float, unit: str = ""):
         self.name = name
         self.sensor_id = sensor_id
         self.low_limit = low_limit
         self.high_limit = high_limit
         self.unit = unit
-    
+
     def check_alarm(self, value: float) -> Optional[AlarmEvent]:
         """Check if value triggers an alarm"""
         if value < self.low_limit:
@@ -432,7 +448,7 @@ class SensorConfig:
         elif value > self.high_limit:
             return AlarmEvent(...)  # HIGH alarm
         return None
-    
+
     def get_status(self, value: float, is_faulty: bool = False) -> SensorStatus:
         """Get sensor status based on value"""
         if is_faulty:
@@ -449,12 +465,14 @@ class SensorConfig:
 The **SensorManager** is the central component that manages all sensor communications. It provides a unified interface for multiple protocols.
 
 **Key Features:**
+
 - Manages Serial, TCP, and Modbus communicators
 - Thread-safe sensor reading callbacks
 - Automatic alarm detection
 - Connection management
 
 **Usage:**
+
 ```python
 from sensors.sensor_manager import SensorManager
 from core.sensor_data import SensorConfig
@@ -490,6 +508,7 @@ manager.alarm_triggered.connect(on_alarm_triggered)
 ```
 
 **Methods:**
+
 - `add_sensor()` - Add a sensor with protocol configuration
   - **Automatic Grouping**: Sensors with the same port/server are automatically grouped
   - **Shared Workers**: Multiple sensors on the same port share one worker thread
@@ -499,11 +518,13 @@ manager.alarm_triggered.connect(on_alarm_triggered)
 - `get_connection_status()` - Get connection status for all communicators (not per sensor)
 
 **Worker Thread Creation Logic:**
+
 - Serial: Key = `f"serial_{port}"` → One communicator per unique port
 - TCP: Key = `f"tcp_{host}_{port}"` → One communicator per unique server
 - Modbus: Key = `f"modbus_{host}_{port}"` → One communicator per unique server
 
 **Example:**
+
 ```python
 # Adding 5 sensors:
 # - 2 serial sensors on /dev/pts/7
@@ -520,19 +541,23 @@ manager.add_sensor(5, config5, "tcp", {"host": "localhost", "port": 5000, ...}) 
 ```
 
 **Signals:**
+
 - `sensor_reading_received` - Emitted when a reading is received
 - `alarm_triggered` - Emitted when an alarm is detected
 
 ### 3. Sensor Communicators
 
 #### SerialSensorCommunicator (`sensors/sensor_serial_comm.py`)
+
 Handles Serial/PTY communication:
+
 - Connects to PTY devices (pseudo-terminals)
 - Reads JSON frames terminated by newline
 - Runs in worker thread
 - Thread-safe callback mechanism
 
 **Frame Format (JSON):**
+
 ```json
 {
   "sensor_id": 1,
@@ -545,7 +570,9 @@ Handles Serial/PTY communication:
 ```
 
 #### TCPSensorCommunicator (`sensors/sensor_tcp_comm.py`)
+
 Handles TCP/IP communication:
+
 - Connects to TCP servers
 - Reads JSON frames terminated by newline
 - Runs in worker thread
@@ -554,13 +581,16 @@ Handles TCP/IP communication:
 **Frame Format:** Same as Serial (JSON)
 
 #### ModbusSensorCommunicator (`sensors/sensor_modbus_comm.py`)
+
 Handles Modbus/TCP communication:
+
 - Connects to Modbus/TCP servers
 - Uses Function Code 3 (Read Holding Registers)
 - Reads 16-bit integer values (scaled by 10)
 - Converts to float by dividing by 10
 
 **Frame Format (Modbus/TCP):**
+
 - **Request**: MBAP Header (7 bytes) + PDU (Function Code 3 + Register Address + Count)
 - **Response**: MBAP Header (7 bytes) + PDU (Function Code 3 + Byte Count + Register Values)
 - **Value Encoding**: 16-bit integer (scaled by 10), e.g., 455 = 45.5
@@ -622,7 +652,9 @@ The configuration file contains all system settings:
 ### Configuration Sections
 
 #### Sensors Array
+
 Each sensor entry contains:
+
 - `name`: Human-readable sensor name
 - `id`: Unique sensor ID (1-5)
 - `low_limit`: Lower alarm threshold
@@ -633,11 +665,13 @@ Each sensor entry contains:
 - `simulator_config`: Simulator-specific settings
 
 #### Alarm Settings
+
 - `enable_notifications`: Enable/disable all notifications
 - `enable_desktop_notifications`: Enable desktop notifications
 - `webhook_url`: URL for webhook POST requests
 
 #### Remote Console
+
 - `enabled`: Enable/disable remote console
 - `host`: WebSocket server host
 - `port`: WebSocket server port (default: 8765)
@@ -661,6 +695,7 @@ For Serial sensors (1 & 2), the PTY path is dynamic. After starting the simulato
 **Protocol:** Serial over Pseudo-Terminal (PTY)
 
 **Configuration:**
+
 - Baudrate: 115200 (configurable)
 - Data bits: 8
 - Parity: None (N)
@@ -668,6 +703,7 @@ For Serial sensors (1 & 2), the PTY path is dynamic. After starting the simulato
 - Frame format: JSON terminated by newline
 
 **How It Works:**
+
 1. Simulator creates a PTY pair (master/slave)
 2. Simulator writes to master file descriptor
 3. Application connects to slave device (e.g., `/dev/pts/9`)
@@ -675,8 +711,16 @@ For Serial sensors (1 & 2), the PTY path is dynamic. After starting the simulato
 5. Frames are parsed and converted to `SensorReading` objects
 
 **Example Frame:**
+
 ```json
-{"sensor_id":1,"sensor_name":"Temperature Sensor 1","value":45.5,"timestamp":"2025-12-28T12:00:00","status":"OK","unit":"°C"}
+{
+  "sensor_id": 1,
+  "sensor_name": "Temperature Sensor 1",
+  "value": 45.5,
+  "timestamp": "2025-12-28T12:00:00",
+  "status": "OK",
+  "unit": "°C"
+}
 ```
 
 ### TCP Communication
@@ -684,11 +728,13 @@ For Serial sensors (1 & 2), the PTY path is dynamic. After starting the simulato
 **Protocol:** TCP/IP Socket
 
 **Configuration:**
+
 - Host: localhost (configurable)
 - Port: 5000, 5001 (configurable)
 - Frame format: JSON terminated by newline
 
 **How It Works:**
+
 1. Simulator creates TCP server on specified port
 2. Application connects as TCP client
 3. Simulator sends JSON frames continuously
@@ -701,12 +747,14 @@ For Serial sensors (1 & 2), the PTY path is dynamic. After starting the simulato
 **Protocol:** Modbus/TCP (Function Code 3)
 
 **Configuration:**
+
 - Host: localhost
 - Port: 1502 (default Modbus port)
 - Unit ID: 1
 - Register: 0
 
 **How It Works:**
+
 1. Simulator creates Modbus/TCP server
 2. Application connects as Modbus client
 3. Application sends Function Code 3 requests
@@ -714,7 +762,9 @@ For Serial sensors (1 & 2), the PTY path is dynamic. After starting the simulato
 5. Values are 16-bit integers scaled by 10 (e.g., 455 = 45.5)
 
 **Frame Structure:**
+
 - **MBAP Header (7 bytes):**
+
   - Transaction ID (2 bytes)
   - Protocol ID (2 bytes) = 0
   - Length (2 bytes)
@@ -727,6 +777,7 @@ For Serial sensors (1 & 2), the PTY path is dynamic. After starting the simulato
   - Response: Byte Count + Register Values
 
 **Value Encoding:**
+
 - Values stored as 16-bit integers (0-65535)
 - Scaled by 10 for decimal precision (e.g., 455 = 45.5)
 - Negative values use two's complement (e.g., 65536 - 9990 = 55546 for -999.0)
@@ -744,6 +795,7 @@ The desktop application provides a modern PyQt5 interface with a light theme, re
 The Dashboard tab is the main monitoring interface, featuring:
 
 **Left Panel - Sensor Status Table:**
+
 - **Real-Time Sensor Readings**: Live data from all configured sensors
 - **Color-Coded Rows**: Visual status indication
   - 🟢 **Green**: Sensor OK (value within limits)
@@ -761,6 +813,7 @@ The Dashboard tab is the main monitoring interface, featuring:
 - **Auto-Sizing Columns**: Columns automatically size to content
 
 **Right Panel - Real-Time Plots:**
+
 - **Individual Plots**: One plot per sensor
 - **Rolling Window**: Shows last 15 seconds of data (configurable 10-20 seconds)
 - **Fixed Y-Axis**: Y-axis range fixed based on sensor's low_limit and high_limit with padding
@@ -774,6 +827,7 @@ The Dashboard tab is the main monitoring interface, featuring:
 - **Compact Height**: Optimized plot height for better visibility
 
 **Global System Health Indicator:**
+
 - **Location**: Beside Connect/Disconnect button in header
 - **Status Levels**:
   - 🟢 **Normal / Healthy**: All sensors OK, no alarms
@@ -782,12 +836,14 @@ The Dashboard tab is the main monitoring interface, featuring:
 - **Compact Display**: Shows overall system health at a glance
 
 **Dashboard Alarm Table:**
+
 - **Quick View**: Last 10 alarms displayed directly on dashboard
 - **Columns**: Time, Sensor Name, Value, Alarm Type, Low Limit, High Limit, Unit
 - **Real-Time Updates**: Automatically updates when new alarms occur
 - **Located**: Under sensor status table for quick reference
 
 **Layout:**
+
 - **Split Layout**: Sensor table on left, plots on right
 - **Non-Resizable Splitter**: Fixed layout ratio (cannot be dragged)
 - **Resizable Window**: Main window can be resized
@@ -798,6 +854,7 @@ The Dashboard tab is the main monitoring interface, featuring:
 The Maintenance Console provides secure, password-protected access to advanced features:
 
 **Authentication:**
+
 - **Username/Password**: Credentials from `config.json` → `remote_console.users`
 - **Secure Access**: Content hidden until authenticated
 - **User Info Display**: Shows logged-in username
@@ -807,6 +864,7 @@ The Maintenance Console provides secure, password-protected access to advanced f
 **Sub-Tabs (Available After Authentication):**
 
 1. **Alarm Log Tab:**
+
    - **Complete Alarm History**: All alarms with full details
    - **Columns**:
      - Time
@@ -821,6 +879,7 @@ The Maintenance Console provides secure, password-protected access to advanced f
    - **Real-Time Updates**: Automatically updates when new alarms occur
 
 2. **System Tools Tab:**
+
    - **Run Self-Test**: Comprehensive system diagnostics
      - Sensor connections
      - Communication status
@@ -869,7 +928,7 @@ The Maintenance Console provides secure, password-protected access to advanced f
 2. **Connect to Sensors**: Click "Connect" button
 3. **View Dashboard**: Monitor real-time sensor data, plots, and alarms
 4. **Check System Health**: View global health indicator
-5. **Access Maintenance Console**: 
+5. **Access Maintenance Console**:
    - Click "Maintenance Console" tab
    - Enter username and password
    - Access alarm log, system tools, and live logs
@@ -897,6 +956,7 @@ The Remote Console provides web-based remote access to the monitoring system via
 **Protocol:** WebSocket (JSON messages)
 
 **Authentication:**
+
 1. Client connects to WebSocket
 2. Client sends authentication message:
    ```json
@@ -922,6 +982,7 @@ The Remote Console provides web-based remote access to the monitoring system via
 ### Available Commands
 
 #### 1. Get Status
+
 ```json
 {
   "type": "command",
@@ -930,6 +991,7 @@ The Remote Console provides web-based remote access to the monitoring system via
 ```
 
 **Response:**
+
 ```json
 {
   "type": "status",
@@ -940,6 +1002,7 @@ The Remote Console provides web-based remote access to the monitoring system via
 ```
 
 #### 2. Get Sensors
+
 ```json
 {
   "type": "command",
@@ -948,6 +1011,7 @@ The Remote Console provides web-based remote access to the monitoring system via
 ```
 
 **Response:**
+
 ```json
 {
   "type": "sensors",
@@ -965,6 +1029,7 @@ The Remote Console provides web-based remote access to the monitoring system via
 ```
 
 #### 3. Get Alarms
+
 ```json
 {
   "type": "command",
@@ -974,6 +1039,7 @@ The Remote Console provides web-based remote access to the monitoring system via
 ```
 
 **Response:**
+
 ```json
 {
   "type": "alarms",
@@ -983,6 +1049,7 @@ The Remote Console provides web-based remote access to the monitoring system via
 ```
 
 #### 4. Clear Alarms
+
 ```json
 {
   "type": "command",
@@ -993,6 +1060,7 @@ The Remote Console provides web-based remote access to the monitoring system via
 **Requires:** `write` permission
 
 #### 5. Run Self-Test
+
 ```json
 {
   "type": "command",
@@ -1003,6 +1071,7 @@ The Remote Console provides web-based remote access to the monitoring system via
 **Requires:** `commands` permission
 
 **Response:**
+
 ```json
 {
   "type": "self_test",
@@ -1018,6 +1087,7 @@ The Remote Console provides web-based remote access to the monitoring system via
 ```
 
 #### 6. Get Snapshot
+
 ```json
 {
   "type": "command",
@@ -1026,6 +1096,7 @@ The Remote Console provides web-based remote access to the monitoring system via
 ```
 
 **Response:**
+
 ```json
 {
   "type": "snapshot",
@@ -1048,16 +1119,17 @@ The Remote Console provides web-based remote access to the monitoring system via
 ### Web Interface
 
 The web interface (`web/remote_console_client.html`) provides:
+
 - **Title**: "Production line Remote Maintenance Console"
 - **Favicon**: Custom favicon (`fav.png`)
 - **Login Screen**: Authentication with username/password
 - **System Status**: Real-time status display
 - **Sensor Table**: Live sensor readings
-- **Alarm Log Section**: 
+- **Alarm Log Section**:
   - Complete alarm history
   - Columns: Time, Sensor, Value, Type, **Low Limit**, **High Limit**
   - Real-time updates
-- **Live Log Viewer Section**: 
+- **Live Log Viewer Section**:
   - Side-by-side with alarm log (on larger screens)
   - Real-time system logs
   - Color-coded log levels
@@ -1073,6 +1145,7 @@ The web interface (`web/remote_console_client.html`) provides:
 ### Alarm Detection
 
 Alarms are automatically detected when:
+
 1. Sensor value < `low_limit` → **LOW Alarm**
 2. Sensor value > `high_limit` → **HIGH Alarm**
 3. Sensor value = -999.0 → **Faulty Sensor**
@@ -1088,46 +1161,42 @@ Alarms are automatically detected when:
    - **Low limit** (at time of alarm)
    - **High limit** (at time of alarm)
    - Unit
-3. **State Transition Check**: System checks if this is a state transition
-   - Notifications sent only when sensor status changes
-   - Prevents spam from continuous alarm conditions
-4. **Notification**: `NotificationManager` sends notifications (only on transitions)
-5. **Logging**: Alarm is added to alarm log (GUI and Remote Console)
+3. **Notification**: `NotificationManager` sends notifications for all alarms (no limits or filtering)
+4. **Logging**: Alarm is added to alarm log (GUI and Remote Console)
 
-### State Transition Notifications
+### Notification Behavior
 
-The system implements intelligent notification logic to prevent notification spam:
+The system sends notifications for all alarms without any filtering or limits:
 
 **Notification Rules:**
-- **LOW Alarm**: Notification sent only when transitioning from OK or HIGH_ALARM to LOW_ALARM
-- **HIGH Alarm**: Notification sent only when transitioning from OK or LOW_ALARM to HIGH_ALARM
-- **FAULT**: Notification sent only when transitioning from non-faulty to faulty (-999)
-- **Recovery**: When sensor recovers from alarm/fault, system tracks recovery to allow new notifications if alarm reoccurs
+
+- **All Alarms**: Every alarm triggers both webhook and desktop notifications immediately
+- **No State Transition Checks**: Notifications are sent regardless of previous sensor status
+- **No Filtering**: All alarm types (LOW, HIGH, FAULT) trigger notifications
+- **Complete Coverage**: Ensures no alarms are missed or filtered out
 
 **Benefits:**
-- Prevents notification spam during continuous alarm conditions
-- Users are notified when alarms first occur
-- Users are notified when sensors recover
-- Users are notified if sensor re-enters alarm state after recovery
 
-**Implementation:**
-- `previous_sensor_status` dictionary tracks last known status of each sensor
-- Status transitions are detected by comparing current status with previous status
-- Notifications are sent only on actual state changes, not on every reading
+- Complete alarm visibility - every alarm is notified
+- No missed notifications due to filtering
+- Real-time alerting for all alarm conditions
+- Immediate notification for every alarm occurrence
 
 ### Notification Methods
 
 #### Desktop Notifications
+
 - **Platform**: Linux (via `notify-send`) and Windows (via `win10toast`)
 - **Automatic**: Enabled by default if system supports it
 - **No Configuration**: Works out of the box
-- **State Transition Only**: Notifications sent only on state transitions
+- **Unlimited**: All alarms trigger desktop notifications immediately
 
 #### Webhook Notifications
+
 - **Method**: HTTP POST request
 - **Format**: JSON payload
 - **URL**: Configurable in `config.json`
-- **State Transition Only**: Notifications sent only on state transitions
+- **Unlimited**: All alarms trigger webhook notifications immediately - no filtering
 - **Payload:**
   ```json
   {
@@ -1152,11 +1221,13 @@ python3 scripts/test_webhook_server.py
 ```
 
 This starts a server on `http://localhost:3000` that:
+
 - Receives webhook POST requests
 - Displays them on a web page
 - Auto-refreshes every 5 seconds
 
 Update `config.json`:
+
 ```json
 "webhook_url": "http://localhost:3000/webhook"
 ```
@@ -1172,11 +1243,13 @@ The system includes modular sensor simulators that can be configured for any num
 **Available Simulator Types:**
 
 1. **Serial/PTY Simulators** (`simulators/sensor_1.py`, `sensor_2.py`): For serial communication
+
    - Each simulator creates its own PTY device
    - Can run multiple instances for multiple sensors
    - Example: Run `sensor_1.py` for Temperature, `sensor_2.py` for Pressure
 
 2. **TCP Client Simulators** (`simulators/sensor_3_client.py`, `sensor_4_client.py`): For TCP communication
+
    - Connect as clients to TCP sensor servers
    - Can run multiple instances connecting to the same or different servers
    - Example: Multiple flow rate sensors connecting to different TCP servers
@@ -1191,6 +1264,7 @@ The system includes modular sensor simulators that can be configured for any num
 ### Serial Simulators
 
 **Features:**
+
 - Creates PTY (pseudo-terminal) pair
 - Configurable baudrate and serial parameters
 - Generates realistic sensor values
@@ -1198,6 +1272,7 @@ The system includes modular sensor simulators that can be configured for any num
 - **Multiple Instance Support**: Can run multiple simulators concurrently
 
 **Usage:**
+
 ```bash
 # Single sensor
 python3 simulators/sensor_serial.py --config "temperature:1:115200:8N1"
@@ -1214,17 +1289,20 @@ python3 simulators/sensor_serial.py --config "pressure:2:115200:8N1"
 ```
 
 **Configuration Format:**
+
 ```
 --config "sensor_type:sensor_id:baudrate:config"
 ```
 
 **Example:**
+
 ```
 --config "temperature:1:115200:8N1"
 --config "pressure:2:115200:8N1"
 ```
 
 **Output:**
+
 ```
 Starting Sensor Simulator...
 Sensor ID: 1
@@ -1235,6 +1313,7 @@ Press Ctrl+C to stop
 ```
 
 **Configuration:**
+
 - Baudrate: 115200 (default, configurable)
 - Bytesize: 8
 - Parity: N (None)
@@ -1243,12 +1322,14 @@ Press Ctrl+C to stop
 ### TCP Simulators
 
 **Architecture:**
+
 - **TCP Server** (`simulators/tcp_sensor_server.py`): Central server that accepts sensor client connections
 - **TCP Clients** (`simulators/sensor_3_client.py`, `sensor_4_client.py`): Individual sensor simulators that connect to the server
 - Multiple clients can connect to the same server
 - Multiple servers can run on different ports
 
 **Features:**
+
 - Modular client-server architecture
 - Server acts as relay between sensor clients and main application
 - Supports multiple servers on different ports
@@ -1256,6 +1337,7 @@ Press Ctrl+C to stop
 - Sends JSON frames over TCP
 
 **Usage - Starting TCP System:**
+
 ```bash
 # Start multiple TCP servers and connect sensor clients
 python3 simulators/start_tcp_system.py \
@@ -1266,6 +1348,7 @@ python3 simulators/start_tcp_system.py \
 ```
 
 **Configuration:**
+
 - Host: Configurable (default: localhost)
 - Port: Configurable per server (e.g., 5000, 5001, 5002, etc.)
 - Multiple sensors can connect to the same server port
@@ -1273,17 +1356,20 @@ python3 simulators/start_tcp_system.py \
 ### Modbus Simulator (5)
 
 **Features:**
+
 - Creates Modbus/TCP server
 - Updates holding registers with sensor values
 - Responds to Function Code 3 requests
 - Encodes values as 16-bit integers (scaled by 10)
 
 **Usage:**
+
 ```bash
 python3 simulators/sensor_5.py
 ```
 
 **Configuration:**
+
 - Host: localhost
 - Port: 1502
 - Unit ID: 1
@@ -1292,6 +1378,7 @@ python3 simulators/sensor_5.py
 ### Starting All Simulators
 
 Use the convenience script:
+
 ```bash
 ./scripts/run_all_sensors.sh
 ```
@@ -1299,6 +1386,7 @@ Use the convenience script:
 This starts all configured simulators in separate terminal windows. The script reads the sensor configuration from `config.json` and starts the appropriate simulators for each sensor type.
 
 **Example**: If your `config.json` defines:
+
 - 3 serial sensors → Starts 3 serial simulator instances
 - 4 TCP sensors → Starts TCP servers and connects 4 client instances
 - 2 Modbus sensors → Starts 1 Modbus server (handles both sensors)
@@ -1312,11 +1400,13 @@ The system automatically manages worker threads based on unique ports/servers, n
 ### Unit Tests
 
 Run unit tests with pytest:
+
 ```bash
 python3 -m pytest tests/test_sensor_data.py -v
 ```
 
 **Test Coverage:**
+
 - SensorConfig creation and validation
 - Alarm detection (LOW, HIGH, None)
 - Status determination (OK, LOW_ALARM, HIGH_ALARM, FAULTY)
@@ -1326,27 +1416,32 @@ python3 -m pytest tests/test_sensor_data.py -v
 ### Test Scripts
 
 #### Verify Project
+
 ```bash
 python3 scripts/verify_project.py
 ```
 
 Checks:
+
 - All required files exist
 - Python imports work
 - Configuration is valid
 - Dependencies are installed
 
 #### Test WebSocket Connection
+
 ```bash
 python3 scripts/test_websocket.py
 ```
 
 #### Test Modbus Connection
+
 ```bash
 python3 scripts/test_modbus.py
 ```
 
 #### Test Webhook
+
 ```bash
 # Start test server
 python3 scripts/test_webhook_server.py
@@ -1356,6 +1451,7 @@ python3 scripts/test_webhook.py
 ```
 
 #### Read Sensor Data
+
 ```bash
 # Read Serial sensor data (example: sensor on /dev/pts/7)
 python3 scripts/read_sensor_serial.py
@@ -1373,22 +1469,27 @@ python3 scripts/read_modbus_frame.py
 ### Quick Start
 
 1. **Install Dependencies**
+
    ```bash
    pip install -r requirements.txt
    ```
 
 2. **Start Simulators**
+
    ```bash
    ./scripts/run_all_sensors.sh
    ```
+
    This starts all simulators configured in `config.json`. The number of simulators depends on your configuration.
 
 3. **Update PTY Paths** (for Serial sensors)
+
    - Note PTY paths from simulator output (e.g., `/dev/pts/7`, `/dev/pts/9`)
    - Update `config/config.json` with the actual PTY paths
    - **Note**: Each serial sensor simulator creates its own PTY device
 
 4. **Start Application**
+
    ```bash
    python3 main.py
    ```
@@ -1400,18 +1501,21 @@ python3 scripts/read_modbus_frame.py
 ### Daily Operations
 
 #### Monitoring Sensors
+
 1. Open the desktop application
 2. Click "Connect" to connect to sensors
 3. View Dashboard tab for real-time data
 4. Check Alarm Log tab for alarms
 
 #### Responding to Alarms
+
 1. View alarm details in Alarm Log tab
 2. Check sensor status in Dashboard
 3. Take corrective action if needed
 4. Clear alarms when resolved
 
 #### Remote Monitoring
+
 1. Open web interface: `http://localhost:8080/remote_console_client.html`
 2. Login with appropriate credentials
 3. View real-time sensor data
@@ -1420,14 +1524,17 @@ python3 scripts/read_modbus_frame.py
 ### System Maintenance
 
 #### Run Self-Test
+
 - **Desktop**: System Tools tab → Run Self-Test
 - **Remote**: Web interface → Run Self-Test button
 
 #### Get System Snapshot
+
 - **Desktop**: System Tools tab → Get Snapshot
 - **Remote**: Web interface → Get Snapshot button
 
 #### Clear Alarms
+
 - **Desktop**: Alarm Log tab → Clear Log button
 - **Remote**: Web interface → Clear Alarms button
 
@@ -1440,11 +1547,13 @@ python3 scripts/read_modbus_frame.py
 The Si-Ware system provides comprehensive API documentation in multiple formats:
 
 1. **OpenAPI 3.0 Specification** (`api/openapi.yaml`)
+
    - Complete OpenAPI/Swagger specification
    - Machine-readable API definition
    - Compatible with Swagger UI, ReDoc, and code generation tools
 
 2. **Markdown Documentation** (`api/API_DOCUMENTATION.md`)
+
    - Human-readable API documentation
    - Detailed endpoint descriptions
    - Request/response examples
@@ -1458,16 +1567,20 @@ The Si-Ware system provides comprehensive API documentation in multiple formats:
 #### Viewing API Documentation
 
 **Option 1: Swagger UI (Recommended)**
+
 ```bash
 python3 scripts/serve_api_docs.py
 ```
+
 Then open: `http://localhost:8081/`
 
 **Option 2: Online Swagger Editor**
+
 1. Open https://editor.swagger.io/
 2. Load `api/openapi.yaml`
 
 **Option 3: Markdown Documentation**
+
 ```bash
 cat api/API_DOCUMENTATION.md
 ```
@@ -1502,6 +1615,7 @@ All connections require authentication:
 #### Example Request/Response
 
 **Request:**
+
 ```json
 {
   "type": "command",
@@ -1510,6 +1624,7 @@ All connections require authentication:
 ```
 
 **Response:**
+
 ```json
 {
   "type": "status",
@@ -1520,6 +1635,7 @@ All connections require authentication:
 ```
 
 For complete API documentation, see:
+
 - `api/API_DOCUMENTATION.md` - Detailed markdown documentation
 - `api/openapi.yaml` - OpenAPI specification
 - Run `python3 scripts/serve_api_docs.py` for interactive Swagger UI
@@ -1527,15 +1643,18 @@ For complete API documentation, see:
 ### SensorManager API
 
 #### `add_sensor(sensor_id, config, protocol, protocol_config)`
+
 Add a sensor to the manager.
 
 **Parameters:**
+
 - `sensor_id` (int): Unique sensor ID
 - `config` (SensorConfig): Sensor configuration
 - `protocol` (str): "serial", "tcp", or "modbus"
 - `protocol_config` (dict): Protocol-specific configuration
 
 **Example:**
+
 ```python
 manager.add_sensor(
     sensor_id=1,
@@ -1546,14 +1665,17 @@ manager.add_sensor(
 ```
 
 #### `connect_all() -> Dict[str, bool]`
+
 Connect to all sensors.
 
 **Returns:** Dictionary mapping communicator keys to connection status
 
 #### `disconnect_all()`
+
 Disconnect from all sensors.
 
 #### `get_connection_status() -> Dict[str, bool]`
+
 Get connection status for all communicators.
 
 **Returns:** Dictionary mapping communicator keys to connection status
@@ -1563,6 +1685,7 @@ Get connection status for all communicators.
 #### WebSocket Messages
 
 **Authentication:**
+
 ```json
 {
   "type": "auth",
@@ -1572,6 +1695,7 @@ Get connection status for all communicators.
 ```
 
 **Command:**
+
 ```json
 {
   "type": "command",
@@ -1580,6 +1704,7 @@ Get connection status for all communicators.
 ```
 
 **Response:**
+
 ```json
 {
   "type": "status",
@@ -1592,11 +1717,13 @@ Get connection status for all communicators.
 ### SensorConfig API
 
 #### `check_alarm(value: float) -> Optional[AlarmEvent]`
+
 Check if a value triggers an alarm.
 
 **Returns:** `AlarmEvent` if alarm triggered, `None` otherwise
 
 #### `get_status(value: float, is_faulty: bool = False) -> SensorStatus`
+
 Get sensor status based on value.
 
 **Returns:** `SensorStatus` enum value
@@ -1608,31 +1735,41 @@ Get sensor status based on value.
 ### Common Issues
 
 #### 1. "ModuleNotFoundError: No module named 'core'"
+
 **Solution:** Run from project root directory or set PYTHONPATH:
+
 ```bash
 PYTHONPATH=. python3 main.py
 ```
 
 #### 2. "Serial port not found" or "Connection refused"
+
 **Solution:**
+
 - Ensure simulators are running
 - Check PTY paths in `config.json` match simulator output
 - Verify TCP/Modbus ports are not in use
 
 #### 3. "WebSocket connection failed"
+
 **Solution:**
+
 - Ensure main application is running
 - Check firewall settings
 - Verify port 8765 is not in use
 
 #### 4. "No sensor data received"
+
 **Solution:**
+
 - Check sensor connections (click "Connect" button)
 - Verify simulators are running
 - Check connection status in System Tools → Get Snapshot
 
 #### 5. "PTY device not found"
+
 **Solution:**
+
 - Restart the simulator
 - Update `config.json` with the new PTY path
 - Restart the main application
@@ -1644,6 +1781,7 @@ Enable debug logging by modifying the code to add print statements or use Python
 ### Connection Status
 
 Check connection status:
+
 1. Desktop: System Tools tab → Get Snapshot
 2. Remote: Web interface → Get Snapshot command
 
@@ -1652,21 +1790,25 @@ This shows which sensors are connected and their status.
 ### Testing Individual Components
 
 #### Test Serial Communication
+
 ```bash
 python3 scripts/read_sensor_serial.py
 ```
 
 #### Test Modbus Communication
+
 ```bash
 python3 scripts/read_modbus_frame.py
 ```
 
 #### Test WebSocket
+
 ```bash
 python3 scripts/test_websocket.py
 ```
 
 #### Test Webhook
+
 ```bash
 # Terminal 1
 python3 scripts/test_webhook_server.py
@@ -1680,6 +1822,7 @@ python3 scripts/test_webhook.py
 ## Additional Resources
 
 ### Documentation Files
+
 - `README.md` - Quick overview
 - `Project_Documentation.md` - Complete system documentation (this file)
 - `Project_Documentation.pdf` - PDF version
@@ -1690,11 +1833,13 @@ python3 scripts/test_webhook.py
 - `SYSTEM_FLOWCHART.md` - System flowchart documentation
 
 ### Scripts
+
 - `scripts/verify_project.py` - Project verification
 - `scripts/test_*.py` - Various test scripts
 - `scripts/read_*.py` - Sensor reading scripts
 
 ### Configuration
+
 - `config/config.json` - Main configuration file
 
 ---
@@ -1704,6 +1849,7 @@ python3 scripts/test_webhook.py
 This comprehensive documentation covers all aspects of the Si-Ware Production Line Monitoring System. All documentation is contained in this single file and its PDF version. For additional help, examine the source code comments.
 
 **Key Points:**
+
 - Multi-protocol sensor support (Serial, TCP, Modbus)
 - Thread-safe architecture with worker threads
 - Real-time GUI with PyQt5
@@ -1712,18 +1858,20 @@ This comprehensive documentation covers all aspects of the Si-Ware Production Li
 - Modular, extensible design
 
 **System Requirements:**
+
 - Python 3.8+
 - Linux (Ubuntu recommended) or Windows
 - Required Python packages (see `requirements.txt`)
 
 **Support:**
+
 - Refer to this comprehensive documentation for all information
 - Run `scripts/verify_project.py` to verify installation
 - Use test scripts to verify individual components
 
 ---
 
-*Last Updated: January 2025*
+_Last Updated: January 2025_
 
 ## Recent Updates
 
@@ -1735,7 +1883,7 @@ This comprehensive documentation covers all aspects of the Si-Ware Production Li
 - ✅ **Maintenance Console Tab**: Password-protected tab with authentication from `config.json`
 - ✅ **Alarm Log with Limits**: Alarm log now includes low_limit and high_limit at time of alarm
 - ✅ **Live Log Viewer**: Real-time system logs including login/logout, alarm clearing, sensor connections, and diagnostics
-- ✅ **State Transition Notifications**: Notifications sent only on state transitions (prevents spam)
+- ✅ **Unlimited Notifications**: All alarms trigger webhook and desktop notifications immediately - no filtering or limits
 - ✅ **Dashboard Alarm Table**: Quick view of last 10 alarms directly on dashboard
 - ✅ **Application Icon**: Custom icon (`fav.png`) for both desktop application and web interface
 - ✅ **Light Theme**: Modern, clean light theme interface
@@ -1744,4 +1892,3 @@ This comprehensive documentation covers all aspects of the Si-Ware Production Li
 - ✅ **Multiple Sensor Simulator Support**: Can run multiple serial sensor simulators concurrently
 - ✅ **Web Interface Updates**: Alarm log and live log viewer side-by-side, includes low/high limits
 - ✅ **Enhanced Logging**: Comprehensive system logging with color-coded levels
-

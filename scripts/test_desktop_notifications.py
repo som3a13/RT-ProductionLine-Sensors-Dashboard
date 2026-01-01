@@ -36,7 +36,7 @@ def test_desktop_notifications():
     print("\n1. Initializing NotificationManager...")
     try:
         manager = NotificationManager(config)
-        print(f"   ✓ NotificationManager initialized")
+        print(f"   [OK] NotificationManager initialized")
         print(f"   - Desktop notifications enabled: {manager.desktop_enabled}")
         print(f"   - System tray available: {manager.tray_icon is not None}")
         if manager.is_windows:
@@ -68,7 +68,7 @@ def test_desktop_notifications():
         ),
     ]
     
-    print(f"   ✓ Created {len(alarms)} test alarms")
+    print(f"   [OK] Created {len(alarms)} test alarms")
     
     # Send notifications
     print("\n3. Sending desktop notifications...")
@@ -82,7 +82,7 @@ def test_desktop_notifications():
                 alarm,
                 f"Test alarm: {alarm.sensor_name} - {alarm.alarm_type}"
             )
-            print(f"   ✓ Notification sent")
+            print(f"   [OK] Notification sent")
         except Exception as e:
             print(f"   ✗ Error: {e}")
     

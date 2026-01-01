@@ -27,7 +27,7 @@ def test_modbus_connection(host, port, unit_id=1, register=0):
         print(f"  Make sure to start: python3 simulators/sensor_simulator_simple.py")
         return False
     
-    print(f"✓ Port {port} is open")
+    print(f"[OK] Port {port} is open")
     
     # Try Modbus connection
     try:
@@ -35,7 +35,7 @@ def test_modbus_connection(host, port, unit_id=1, register=0):
         client = ModbusTcpClient(host=host, port=port)
         
         if client.connect():
-            print(f"✓ Modbus client connected")
+            print(f"[OK] Modbus client connected")
             
             # Try reading a register
             print(f"Reading register {register} (unit {unit_id})...")
@@ -55,7 +55,7 @@ def test_modbus_connection(host, port, unit_id=1, register=0):
                 if raw_value > 32767:
                     raw_value = raw_value - 65536
                 value = raw_value / 10.0
-                print(f"✓ Register {register} value: {raw_value} (raw) = {value} (scaled)")
+                print(f"[OK] Register {register} value: {raw_value} (raw) = {value} (scaled)")
                 client.close()
                 return True
             else:

@@ -248,7 +248,7 @@ class SerialSensorSimulator:
             self.master_fd = master_fd
             os.close(slave_fd)
             
-            print(f"✓ Created PTY for {self.sensor_name}")
+            print(f"[OK] Created PTY for {self.sensor_name}")
             print(f"  Device: {self.slave_name}")
             print(f"  Sensor ID: {self.sensor_id}")
             print(f"  Sensor Type: {self.sensor_type}")
@@ -286,7 +286,7 @@ class SerialSensorSimulator:
                 
                 self.slave_name = com_name
                 
-                print(f"✓ Using COM port for {self.sensor_name}")
+                print(f"[OK] Using COM port for {self.sensor_name}")
                 print(f"  Port: {com_name}")
                 print(f"  Sensor ID: {self.sensor_id}")
                 print(f"  Sensor Type: {self.sensor_type}")

@@ -284,6 +284,9 @@ class MainWindow(QMainWindow):
         header_layout.addWidget(health_indicator)
         header_layout.addWidget(self.connect_btn)
         
+        # Update health indicator to show correct initial state (Disconnected)
+        self.update_global_health_indicator()
+        
         layout.addLayout(header_layout)
         
         # Tab widget
@@ -583,14 +586,16 @@ class MainWindow(QMainWindow):
         layout.addWidget(title_label)
         
         # Status indicator (will be updated dynamically)
-        self.global_health_status_label = QLabel("● Normal / Healthy")  # Using bullet instead of emoji
+        # Initialize as Disconnected since no sensors are connected at startup
+        self.global_health_status_label = QLabel("● Disconnected")
         self.global_health_status_label.setStyleSheet("""
             font-size: 14px;
             font-weight: bold;
-            color: #2e7d32;
+            color: #757575;
             padding: 8px 15px;
-            background-color: #c8e6c9;
+            background-color: #e0e0e0;
             border-radius: 5px;
+            border: 1px solid #9e9e9e;
         """)
         layout.addWidget(self.global_health_status_label)
         
@@ -603,17 +608,24 @@ class MainWindow(QMainWindow):
         if not hasattr(self, 'global_health_status_label'):
             return
         
+        # Check if system is connected
+        connection_status = self.sensor_manager.get_connection_status()
+        is_connected = any(connection_status.values()) if connection_status else False
+        
         # Count sensor states
-        total_sensors = len(self.sensor_configs)
         sensors_with_data = len(self.sensor_readings)
         
-        if sensors_with_data == 0:
-            # No data yet - show as normal
-            status_text = "● Normal / Healthy"  # Using bullet instead of emoji
-            status_color = "#2e7d32"
-            status_bg = "#c8e6c9"
-            border_color = "#a5d6a7"  # Dark green border for normal
+        # Show Disconnected if:
+        # 1. No communication channels are connected, OR
+        # 2. No sensor data has been received (even if connections exist, no data means disconnected)
+        if not is_connected or sensors_with_data == 0:
+            # System is disconnected - no active connections or no sensor data
+            status_text = "● Disconnected"
+            status_color = "#757575"
+            status_bg = "#e0e0e0"
+            border_color = "#9e9e9e"  # Gray border for disconnected
         else:
+            # We have connections AND sensor data - check health status
             # Check for faulty sensors (Critical)
             faulty_count = sum(1 for r in self.sensor_readings.values() 
                              if r.status == SensorStatus.FAULTY)
@@ -683,211 +695,6 @@ class MainWindow(QMainWindow):
         reports_layout.addStretch()
         scroll.setWidget(reports_widget)
         layout.addWidget(scroll)
-        
-        return widget
-    
-    def create_oee_section(self) -> QWidget:
-        """Create OEE metrics section"""
-        widget = QWidget()
-        widget.setStyleSheet("background-color: white; border-radius: 10px; padding: 20px;")
-        layout = QVBoxLayout(widget)
-        
-        title = QLabel("Overall Equipment Effectiveness (OEE)")
-        title.setStyleSheet("font-size: 20px; font-weight: bold; color: #333; margin-bottom: 15px;")
-        layout.addWidget(title)
-        
-        # OEE metrics in a grid
-        metrics_layout = QGridLayout()
-        metrics_layout.setSpacing(20)
-        
-        # OEE metric
-        oee_widget = self.create_metric_display("OEE", self.calculate_metrics()['oee'], "%", QColor(255, 152, 0))
-        metrics_layout.addWidget(oee_widget, 0, 0)
-        
-        # Availability metric
-        avail_widget = self.create_metric_display("Availability", self.calculate_metrics()['availability'], "%", QColor(76, 175, 80))
-        metrics_layout.addWidget(avail_widget, 0, 1)
-        
-        # Performance metric
-        perf_widget = self.create_metric_display("Performance", self.calculate_metrics()['performance'], "%", QColor(0, 188, 212))
-        metrics_layout.addWidget(perf_widget, 0, 2)
-        
-        # Quality metric
-        qual_widget = self.create_metric_display("Quality", self.calculate_metrics()['quality'], "%", QColor(33, 150, 243))
-        metrics_layout.addWidget(qual_widget, 0, 3)
-        
-        layout.addLayout(metrics_layout)
-        
-        # OEE trend plot
-        oee_plot_label = QLabel("OEE Trend (Last 100 Readings)")
-        oee_plot_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #333; margin-top: 20px;")
-        layout.addWidget(oee_plot_label)
-        
-        self.oee_plot = pg.PlotWidget()
-        self.oee_plot.setBackground('w')
-        self.oee_plot.setLabel('left', 'OEE (%)')
-        self.oee_plot.setLabel('bottom', 'Time')
-        self.oee_plot.showGrid(x=True, y=True, alpha=0.3)
-        self.oee_plot.setMinimumHeight(250)
-        layout.addWidget(self.oee_plot)
-        
-        return widget
-    
-    def create_metric_display(self, name: str, value: float, unit: str, color: QColor) -> QWidget:
-        """Create a metric display widget"""
-        widget = QWidget()
-        widget.setStyleSheet("background-color: #f9f9f9; border-radius: 8px; padding: 15px;")
-        layout = QVBoxLayout(widget)
-        
-        name_label = QLabel(name)
-        name_label.setStyleSheet("font-size: 14px; color: #666;")
-        layout.addWidget(name_label)
-        
-        value_label = QLabel(f"{value:.1f} {unit}")
-        value_label.setStyleSheet(f"font-size: 32px; font-weight: bold; color: rgb({color.red()}, {color.green()}, {color.blue()});")
-        layout.addWidget(value_label)
-        
-        return widget
-    
-    def create_shift_performance_section(self) -> QWidget:
-        """Create shift performance report section"""
-        widget = QWidget()
-        widget.setStyleSheet("background-color: white; border-radius: 10px; padding: 20px;")
-        layout = QVBoxLayout(widget)
-        
-        title = QLabel("Shift Performance Report")
-        title.setStyleSheet("font-size: 20px; font-weight: bold; color: #333; margin-bottom: 15px;")
-        layout.addWidget(title)
-        
-        # Shift performance table
-        shift_table = QTableWidget()
-        shift_table.setColumnCount(5)
-        shift_table.setHorizontalHeaderLabels([
-            "Shift", "Duration", "Production", "Efficiency", "Status"
-        ])
-        shift_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        shift_table.setRowCount(3)
-        shift_table.setStyleSheet("""
-            QTableWidget {
-                background-color: white;
-                border: 1px solid #e0e0e0;
-            }
-            QHeaderView::section {
-                background-color: #f0f0f0;
-                padding: 10px;
-                font-weight: bold;
-            }
-        """)
-        
-        # Sample data
-        shifts = [
-            ("Day Shift", "8:00 - 16:00", "1,250 units", "94.2%", "✓ Good"),
-            ("Evening Shift", "16:00 - 00:00", "1,180 units", "88.7%", "⚠ Fair"),
-            ("Night Shift", "00:00 - 8:00", "1,320 units", "96.5%", "✓ Excellent")
-        ]
-        
-        for row, (shift, duration, production, efficiency, status) in enumerate(shifts):
-            shift_table.setItem(row, 0, QTableWidgetItem(shift))
-            shift_table.setItem(row, 1, QTableWidgetItem(duration))
-            shift_table.setItem(row, 2, QTableWidgetItem(production))
-            shift_table.setItem(row, 3, QTableWidgetItem(efficiency))
-            status_item = QTableWidgetItem(status)
-            if "✓" in status:
-                status_item.setBackground(QColor(200, 255, 200))
-            else:
-                status_item.setBackground(QColor(255, 255, 200))
-            shift_table.setItem(row, 4, status_item)
-        
-        layout.addWidget(shift_table)
-        
-        return widget
-    
-    def create_utilization_section(self) -> QWidget:
-        """Create machine utilization report section"""
-        widget = QWidget()
-        widget.setStyleSheet("background-color: white; border-radius: 10px; padding: 20px;")
-        layout = QVBoxLayout(widget)
-        
-        title = QLabel("Machine Utilization Report")
-        title.setStyleSheet("font-size: 20px; font-weight: bold; color: #333; margin-bottom: 15px;")
-        layout.addWidget(title)
-        
-        # Utilization plot
-        self.utilization_plot = pg.PlotWidget()
-        self.utilization_plot.setBackground('w')
-        self.utilization_plot.setLabel('left', 'Utilization (%)')
-        self.utilization_plot.setLabel('bottom', 'Sensor/Machine')
-        self.utilization_plot.showGrid(x=True, y=True, alpha=0.3)
-        self.utilization_plot.setMinimumHeight(300)
-        
-        # Create bar chart for utilization
-        sensors = sorted(self.sensor_configs.keys())
-        utilization_data = []
-        sensor_names = []
-        for sensor_id in sensors:
-            reading = self.sensor_readings.get(sensor_id)
-            if reading:
-                # Calculate utilization based on status (OK = 100%, Alarm = 70%, Faulty = 0%)
-                if reading.status == SensorStatus.OK:
-                    util = 100.0
-                elif reading.status in [SensorStatus.LOW_ALARM, SensorStatus.HIGH_ALARM]:
-                    util = 70.0
-                else:
-                    util = 0.0
-                utilization_data.append(util)
-                sensor_names.append(self.sensor_configs[sensor_id].name)
-            else:
-                utilization_data.append(0.0)
-                sensor_names.append(self.sensor_configs[sensor_id].name)
-        
-        if utilization_data:
-            bg = pg.BarGraphItem(x=range(len(sensor_names)), height=utilization_data, width=0.6, brush='#2196F3')
-            self.utilization_plot.addItem(bg)
-            self.utilization_plot.getAxis('bottom').setTicks([[(i, name) for i, name in enumerate(sensor_names)]])
-        
-        layout.addWidget(self.utilization_plot)
-        
-        return widget
-    
-    def create_quality_section(self) -> QWidget:
-        """Create quality/defect rate report section"""
-        widget = QWidget()
-        widget.setStyleSheet("background-color: white; border-radius: 10px; padding: 20px;")
-        layout = QVBoxLayout(widget)
-        
-        title = QLabel("Quality & Defect Rate Report")
-        title.setStyleSheet("font-size: 20px; font-weight: bold; color: #333; margin-bottom: 15px;")
-        layout.addWidget(title)
-        
-        # Quality metrics
-        quality_layout = QHBoxLayout()
-        
-        # Good units
-        good_widget = self.create_metric_display("Good Units", 95.2, "%", QColor(76, 175, 80))
-        quality_layout.addWidget(good_widget)
-        
-        # Defect rate
-        defect_widget = self.create_metric_display("Defect Rate", 4.8, "%", QColor(244, 67, 54))
-        quality_layout.addWidget(defect_widget)
-        
-        # Quality trend
-        quality_trend_widget = self.create_metric_display("Quality Trend", +2.1, "%", QColor(33, 150, 243))
-        quality_layout.addWidget(quality_trend_widget)
-        
-        layout.addLayout(quality_layout)
-        
-        # Quality trend plot
-        quality_plot_label = QLabel("Quality Trend Over Time")
-        quality_plot_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #333; margin-top: 20px;")
-        layout.addWidget(quality_plot_label)
-        
-        self.quality_plot = pg.PlotWidget()
-        self.quality_plot.setBackground('w')
-        self.quality_plot.setLabel('left', 'Quality (%)')
-        self.quality_plot.setLabel('bottom', 'Time')
-        self.quality_plot.showGrid(x=True, y=True, alpha=0.3)
-        self.quality_plot.setMinimumHeight(250)
-        layout.addWidget(self.quality_plot)
         
         return widget
     
@@ -1534,7 +1341,7 @@ class MainWindow(QMainWindow):
         self.results_text.append("-" * 60 + "\n")
         
         for test in test_results["tests"]:
-            status_icon = "✓" if test["status"] == "PASS" else "⚠" if test["status"] == "WARN" else "✗"
+            status_icon = "[PASS]" if test["status"] == "PASS" else "[WARN]" if test["status"] == "WARN" else "[FAIL]"
             self.results_text.append(f"{status_icon} {test['name']}: {test['status']}\n")
             self.results_text.append(f"   {test['details']}\n")
             self.results_text.append("\n")
@@ -1631,7 +1438,7 @@ class MainWindow(QMainWindow):
         self.results_text.append("Sensors:\n")
         
         for sensor in snapshot["sensors"]:
-            status_icon = "✓" if sensor["status"] == "OK" else "⚠" if "Alarm" in sensor["status"] else "✗"
+            status_icon = "[OK]" if sensor["status"] == "OK" else "[WARN]" if "Alarm" in sensor["status"] else "[FAIL]"
             self.results_text.append(f"{status_icon} {sensor['name']} (ID: {sensor['id']})\n")
             self.results_text.append(f"   Value: {sensor['value']:.2f} {sensor['unit']}\n")
             self.results_text.append(f"   Status: {sensor['status']}\n")
@@ -1749,7 +1556,7 @@ class MainWindow(QMainWindow):
             # Show details
             status_details = []
             for key, status in results.items():
-                status_details.append(f"{key}: {'✓' if status else '✗'}")
+                status_details.append(f"{key}: {'[OK]' if status else '[FAIL]'}")
             
             if connected < total:
                 QMessageBox.warning(self, "Partial Connection",
@@ -1761,6 +1568,9 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Connection Error",
                               "Could not connect to any sensor communication channels.\n"
                               "Make sure the sensors are connected and available.")
+        
+        # Update global health indicator to reflect connection status
+        self.update_global_health_indicator()
     
     def toggle_connection(self):
         """Toggle connection to sensors"""
@@ -1786,6 +1596,8 @@ class MainWindow(QMainWindow):
             """)
             self.statusBar().showMessage("Disconnected")
             self.add_log_entry("Disconnected from all sensors", "INFO")
+            # Update global health indicator to show disconnected
+            self.update_global_health_indicator()
         else:
             # Connecting
             self.connect_to_sensors()
@@ -1844,7 +1656,12 @@ class MainWindow(QMainWindow):
                         alarm_type="FAULT",
                         unit=reading.unit
                     )
-                    self.notification_manager.send_notification(fault_alarm)
+                    # Send webhook for ALL fault alarms (no limits)
+                    if self.notification_manager.webhook_url:
+                        self.notification_manager.send_webhook(fault_alarm)
+                    # Send desktop notification
+                    message = self.notification_manager._format_alarm_message(fault_alarm)
+                    self.notification_manager.send_desktop_notification(fault_alarm, message)
                 # Sensor just became faulty - add to dashboard alarm table
                 if hasattr(self, 'dashboard_alarm_table'):
                     max_rows = 10
@@ -1892,7 +1709,7 @@ class MainWindow(QMainWindow):
             self.sensor_timestamps[reading.sensor_id].append(reading.timestamp)
     
     def on_alarm_triggered(self, alarm: AlarmEvent):
-        """Handle alarm event - only send notification on state transitions"""
+        """Handle alarm event - send webhook and desktop notifications for all alarms (no limits)"""
         # Get previous status to check for transition
         prev_status = self.previous_sensor_status.get(alarm.sensor_id, SensorStatus.OK)
         
@@ -1904,25 +1721,16 @@ class MainWindow(QMainWindow):
         else:
             current_status = SensorStatus.OK
         
-        # Only send notification if it's a state transition (not already in this alarm state)
-        # For LOW: only notify when transitioning from OK or HIGH (not already in LOW alarm)
-        # For HIGH: only notify when transitioning from OK or LOW (not already in HIGH alarm)
-        should_notify = False
-        if alarm.alarm_type == "LOW":
-            # Only notify if previous status was OK or HIGH (not already in LOW alarm)
-            should_notify = prev_status in [SensorStatus.OK, SensorStatus.HIGH_ALARM]
-        elif alarm.alarm_type == "HIGH":
-            # Only notify if previous status was OK or LOW (not already in HIGH alarm)
-            should_notify = prev_status in [SensorStatus.OK, SensorStatus.LOW_ALARM]
-        else:
-            should_notify = True
+        # Send webhook for ALL alarms (no limits)
+        if self.notification_manager.webhook_url:
+            self.notification_manager.send_webhook(alarm)
+        
+        # Send desktop notification for ALL alarms (no limits)
+        message = self.notification_manager._format_alarm_message(alarm)
+        self.notification_manager.send_desktop_notification(alarm, message)
         
         # Update previous status
         self.previous_sensor_status[alarm.sensor_id] = current_status
-        
-        # Send notification only on transition
-        if should_notify:
-            self.notification_manager.send_notification(alarm)
         
         # Always add to alarm log (even if not a transition, for historical record)
         self.alarm_log.append(alarm)
@@ -1998,51 +1806,6 @@ class MainWindow(QMainWindow):
         
         # Add to live log viewer
         self.add_log_entry(f"{alarm.alarm_type} alarm on {alarm.sensor_name} (ID: {alarm.sensor_id}): Value = {alarm.value:.2f} {alarm.unit}", "ALARM")
-    
-    def calculate_metrics(self):
-        """Calculate OEE metrics from sensor data"""
-        # Calculate based on sensor readings
-        total_sensors = len(self.sensor_configs)
-        if total_sensors == 0:
-            return {
-                'oee': 94.0,
-                'availability': 100.0,
-                'performance': 94.0,
-                'quality': 100.0
-            }
-        
-        # Count sensors in different states
-        ok_count = 0
-        alarm_count = 0
-        faulty_count = 0
-        
-        for sensor_id, reading in self.sensor_readings.items():
-            if reading.status == SensorStatus.OK:
-                ok_count += 1
-            elif reading.status in [SensorStatus.LOW_ALARM, SensorStatus.HIGH_ALARM]:
-                alarm_count += 1
-            elif reading.status == SensorStatus.FAULTY:
-                faulty_count += 1
-        
-        # Availability: percentage of sensors that are OK or in alarm (not faulty)
-        availability = ((ok_count + alarm_count) / total_sensors * 100) if total_sensors > 0 else 100.0
-        
-        # Performance: based on how many sensors are within optimal range
-        # For simplicity, use OK sensors as performance indicator
-        performance = (ok_count / total_sensors * 100) if total_sensors > 0 else 94.0
-        
-        # Quality: inverse of alarm rate (simplified)
-        quality = ((ok_count) / total_sensors * 100) if total_sensors > 0 else 100.0
-        
-        # OEE = Availability × Performance × Quality / 10000
-        oee = (availability * performance * quality) / 10000
-        
-        return {
-            'oee': min(100.0, max(0.0, oee)),
-            'availability': min(100.0, max(0.0, availability)),
-            'performance': min(100.0, max(0.0, performance)),
-            'quality': min(100.0, max(0.0, quality))
-        }
     
     def update_display(self):
         """Update the display with latest sensor data"""
@@ -2434,7 +2197,7 @@ class MainWindow(QMainWindow):
                 self.remote_console.set_clear_alarms_callback(self.clear_alarm_log_from_remote)
                 self.console_started = True
                 http_port = console_config.get("http_port", 8080)
-                print(f"✓ Remote Console Server started successfully on ws://{host}:{port}")
+                print(f"[OK] Remote Console Server started successfully on ws://{host}:{port}")
                 print(f"  Connect from web client at: http://localhost:{http_port}/web/remote_console_client.html")
             else:
                 print("✗ Failed to initialize Remote Console Server")
@@ -2566,7 +2329,7 @@ class MainWindow(QMainWindow):
                 try:
                     with socketserver.TCPServer(("", http_port), MyHTTPRequestHandler) as httpd:
                         self.http_server = httpd
-                        print(f"✓ HTTP Server started on http://localhost:{http_port}")
+                        print(f"[OK] HTTP Server started on http://localhost:{http_port}")
                         print(f"  Remote Console Client: http://localhost:{http_port}/web/remote_console_client.html")
                         httpd.serve_forever()
                 except OSError as e:

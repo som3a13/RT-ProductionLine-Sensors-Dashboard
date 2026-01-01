@@ -104,7 +104,7 @@ class TCPSensorServer:
             self.running = True
             
             print("=" * 60)
-            print("✓ TCP Sensor Server started")
+            print("[OK] TCP Sensor Server started")
             print("=" * 60)
             print(f"  Host: {self.host}")
             print(f"  Port: {self.port}")

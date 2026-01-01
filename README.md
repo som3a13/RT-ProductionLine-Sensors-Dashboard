@@ -16,7 +16,7 @@ A comprehensive real-time monitoring and maintenance system for industrial produ
 
 - ✅ **Intelligent Alarm Detection**: Automatic detection of LOW/HIGH limits and faulty sensors (-999)
 - ✅ **Alarm Log with Limits**: Complete alarm history including low/high limits at time of alarm
-- ✅ **State Transition Notifications**: Notifications sent only on state transitions (prevents spam)
+- ✅ **Unlimited Notifications**: All alarms trigger notifications (webhook and desktop) - no filtering or limits
 - ✅ **Dashboard Alarm Table**: Quick view of recent alarms directly on dashboard
 - ✅ **Multiple Notification Methods**: Desktop notifications (Linux/Windows) and webhook support
 
@@ -138,9 +138,44 @@ Your `config/config.json` should have sensors configured like this (matching the
 }
 ```
 
-**⚠️ Critical:** The sensor IDs, ports, and protocols in `config.json` **must match** the simulators you start below!
+**Critical:** The sensor IDs, ports, and protocols in `config.json` **must match** the simulators you start below!
 
 ### Step 3: Start Sensor Simulators
+
+**Option A: Automated Headless Startup (Recommended for Linux)**
+
+Use the headless startup script that automatically starts all simulators and updates `config.json`:
+
+```bash
+python3 ./scripts/start_system.py \
+    --serial "temperature:1:115200:8N1" \
+    --serial "pressure:2:115200:8N1" \
+    --modbus "voltage:5:localhost:1502:1:0" \
+    --modbus "pressure:7:localhost:1502:2:0" \
+    --tcp-server-ports 5000 5001 \
+    --tcp-sensor "flow:3:localhost:5000" \
+    --tcp-sensor "vibration:4:localhost:5000" \
+    --tcp-sensor "flow:6:localhost:5001" \
+    --webhook \
+    --main-app
+```
+
+Or use the quick start script:
+
+```bash
+./scripts/start_system_linux.sh
+```
+
+The script will:
+
+- Start all simulators in the background
+- Automatically capture PTY paths from serial simulators
+- Update `config.json` with correct ports and paths
+- Start the webhook server (if `--webhook` is specified)
+- Start the main application (if `--main-app` is specified)
+- Handle Ctrl+C to stop all processes gracefully
+
+**Option B: Manual Startup (Separate Terminals)**
 
 Open **separate terminal windows** for each command. Run them in this order:
 
@@ -157,21 +192,26 @@ python3 ./simulators/start_tcp_system.py --server-ports 5000 5001 --sensor flow:
 ```
 
 **Note:** For serial sensors (Linux), you would also run:
+
 ```bash
 python3 ./simulators/sensor_serial.py --config "temperature:1:115200:8N1" --config "pressure:2:115200:8N1"
 ```
+
 Then update `config.json` with the PTY paths shown in the output (e.g., `/dev/pts/2`).
 
 **Windows users:** For serial sensors, you need to:
+
 1. **Install com0com first** (for virtual COM ports):
    - Double-click `install_com0com_simple.bat` in the project root
    - The script will request Administrator privileges and install com0com automatically
    - After installation, use `setupc.exe` to create COM port pairs (e.g., COM10 <-> COM11)
 2. **Then run the simulator** with `--com-port`:
+
 ```bash
 python3 ./simulators/sensor_serial.py --config "temperature:1:115200:8N1" --com-port COM10
 ```
-   - Use the COM port in `config.json` (e.g., `"port": "COM11"` if simulator uses COM10)
+
+- Use the COM port in `config.json` (e.g., `"port": "COM11"` if simulator uses COM10)
 
 ### Step 4: Start Webhook Server (Optional)
 
@@ -201,6 +241,7 @@ python3 main.py
 ### Quick Start Summary
 
 **Order of execution:**
+
 1. ✅ Install dependencies: `pip3 install -r requirements.txt`
 2. ✅ Configure `config/config.json` to match your simulators (sensor IDs, ports, protocols)
 3. ✅ Start Modbus sensors (Terminal 1)
@@ -380,6 +421,7 @@ python3 simulators/sensor_serial.py \
 **Windows (COM Port - Required):**
 
 **Before running serial sensors on Windows, install com0com:**
+
 1. Double-click `install_com0com_simple.bat` in the project root
 2. The script will request Administrator privileges and install com0com automatically
 3. After installation, use `setupc.exe` to create COM port pairs (e.g., COM10 <-> COM11)
@@ -398,7 +440,7 @@ python simulators\sensor_serial.py --config "pressure:2:115200:8N1" --com-port C
 **Important:**
 
 - **Linux**: Note the PTY path printed when serial simulators start (e.g., `Device: /dev/pts/9`) and update `config/config.json` with the correct paths.
-- **Windows (COM Port - Required)**: 
+- **Windows (COM Port - Required)**:
   - **Install com0com first**: Use `install_com0com_simple.bat` to install virtual COM port driver
   - COM port is **required** on Windows. Use `--com-port COM10` to specify a COM port
   - Use the paired COM port in `config/config.json` (e.g., if simulator uses COM10, use COM11 in config.json)
@@ -426,9 +468,11 @@ python3 simulators/sensor_modbus.py --config "voltage:5:localhost:1502:1:0"
 python3 simulators/sensor_modbus.py --config "temperature:7:localhost:1503:2:0"
 ```
 
-### Step 2: Update Configuration
+### Step 2: Update Configuration (Manual Startup Only)
 
-After starting simulators, update `config/config.json`:
+**Note:** If using the automated startup script (Option A), `config.json` is updated automatically.
+
+If starting manually, after starting simulators, update `config/config.json`:
 
 1. **Serial Sensors**: Update `protocol_config.port` with the PTY path from simulator output
 2. **TCP Sensors**: Verify `protocol_config.host` and `protocol_config.port` match your TCP servers
@@ -603,9 +647,9 @@ Edit `config/config.json` to configure:
 
 ### Notification System
 
-- **State Transition Notifications**: Notifications sent only when sensor status changes (not continuously)
+- **Unlimited Notifications**: All alarms trigger notifications immediately - no filtering or state transition checks
 - **Desktop Notifications**: Automatic on Linux (via `notify-send`) and Windows (via `win10toast`)
-- **Webhook Notifications**: HTTP POST to configurable URL
+- **Webhook Notifications**: HTTP POST to configurable URL - sends all alarms without limits
 - **Alarm Types**: LOW, HIGH, FAULT (for -999 values)
 
 ## 🔧 Usage Guide
@@ -1010,7 +1054,7 @@ python3 scripts/test_websocket.py
 - ✅ Maintenance Console with authentication
 - ✅ Alarm log with low/high limits
 - ✅ Live log viewer with system events
-- ✅ State transition notifications (prevents spam)
+- ✅ Unlimited notifications - all alarms trigger webhook and desktop notifications
 - ✅ Dashboard alarm table
 - ✅ Application icon and favicon
 - ✅ Light theme

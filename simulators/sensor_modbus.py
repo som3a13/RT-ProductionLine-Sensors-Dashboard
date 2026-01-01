@@ -452,7 +452,7 @@ Examples:
                 result = test_sock.connect_ex((host, port))
                 test_sock.close()
                 if result == 0:
-                    print(f"✓ Modbus/TCP server started on {host}:{port}")
+                    print(f"[OK] Modbus/TCP server started on {host}:{port}")
                     print(f"  Serving {len(server_simulators)} sensor(s) with unit IDs: {sorted(stores.keys())}")
                     for simulator in server_simulators:
                         print(f"  - {simulator.sensor_name} (Unit ID: {simulator.unit_id}, Register: {simulator.register})")

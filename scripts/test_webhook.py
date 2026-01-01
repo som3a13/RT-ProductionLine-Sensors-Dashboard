@@ -83,7 +83,7 @@ def test_webhook_notification():
         success = notification_manager.send_webhook(test_alarm)
         
         if success:
-            print("✅ Webhook POST request sent successfully!")
+            print("[OK] Webhook POST request sent successfully!")
             print(f"   Check your server at: {webhook_url}")
             return True
         else:

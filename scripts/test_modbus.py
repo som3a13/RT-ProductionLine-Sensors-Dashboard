@@ -20,7 +20,7 @@ def test_modbus():
         print(f"Connecting...")
         
         if client.connect():
-            print(f"✓ Connected successfully!")
+            print(f"[OK] Connected successfully!")
             
             # Try reading register
             print(f"Reading holding register {register} (unit {unit_id})...")
@@ -39,7 +39,7 @@ def test_modbus():
                     if raw_value > 32767:
                         raw_value = raw_value - 65536
                     value = raw_value / 10.0
-                    print(f"✓ Register {register} value: {raw_value} (raw) = {value} (scaled)")
+                    print(f"[OK] Register {register} value: {raw_value} (raw) = {value} (scaled)")
                 else:
                     print(f"✗ No registers returned")
             

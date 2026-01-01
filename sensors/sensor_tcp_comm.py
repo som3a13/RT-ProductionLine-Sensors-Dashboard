@@ -86,10 +86,10 @@ class TCPSensorCommunicator:
             with self.lock:
                 sensor_ids = list(self.sensor_configs.keys())
             if sensor_ids:
-                print(f"✓ TCP connection established to {self.host}:{self.port}")
+                print(f"[OK] TCP connection established to {self.host}:{self.port}")
                 print(f"  Monitoring sensors: {', '.join([f'Sensor {sid}' for sid in sensor_ids])}")
             else:
-                print(f"✓ TCP connection established to {self.host}:{self.port}")
+                print(f"[OK] TCP connection established to {self.host}:{self.port}")
                 print(f"  Waiting for sensor configurations...")
             
             return True

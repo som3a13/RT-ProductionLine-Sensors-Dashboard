@@ -150,7 +150,7 @@ class NotificationManager(QObject):
             
             if self.tray_icon:
                 self.tray_icon.showMessage(
-                    f"🚨 ALARM: {alarm.sensor_name}",
+                    f"ALARM: {alarm.sensor_name}",
                     f"{alarm.alarm_type} Alarm - Value: {alarm.value:.2f} {alarm.unit}\n"
                     f"Time: {alarm.timestamp.strftime('%H:%M:%S')}",
                     QSystemTrayIcon.Critical,
@@ -164,7 +164,7 @@ class NotificationManager(QObject):
                 if self.win10toast_available and self.toaster:
                     try:
                         self.toaster.show_toast(
-                            f"🚨 ALARM: {alarm.sensor_name}",
+                            f"ALARM: {alarm.sensor_name}",
                             f"{alarm.alarm_type} Alarm - Value: {alarm.value:.2f} {alarm.unit}",
                             duration=5,
                             threaded=True
@@ -177,7 +177,7 @@ class NotificationManager(QObject):
                 # Linux: Use notify-send (if available)
                 if self.use_system_notify:
                     import subprocess
-                    title = f"🚨 ALARM: {alarm.sensor_name}"
+                    title = f"ALARM: {alarm.sensor_name}"
                     body = f"{alarm.alarm_type} Alarm\nValue: {alarm.value:.2f} {alarm.unit}\nTime: {alarm.timestamp.strftime('%H:%M:%S')}"
                     
                     # Use urgency=critical for alarms
@@ -192,10 +192,10 @@ class NotificationManager(QObject):
                     return
             
             # If all methods fail, print to console
-            print(f"⚠️ DESKTOP NOTIFICATION: {message}")
+            print(f"DESKTOP NOTIFICATION: {message}")
             
         except Exception as e:
             print(f"Desktop notification error: {e}")
             # Fallback: print to console
-            print(f"⚠️ ALARM: {alarm.sensor_name} - {alarm.alarm_type} - {alarm.value:.2f} {alarm.unit}")
+            print(f"ALARM: {alarm.sensor_name} - {alarm.alarm_type} - {alarm.value:.2f} {alarm.unit}")
 

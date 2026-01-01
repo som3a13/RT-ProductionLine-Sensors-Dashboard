@@ -5,10 +5,10 @@
       "id": 1,
       "low_limit": 20.0,
       "high_limit": 80.0,
-      "unit": "°C",
+      "unit": "\u00b0C",
       "protocol": "serial",
       "protocol_config": {
-        "port": "/dev/pts/2",
+        "port": "/dev/pts/8",
         "baudrate": 115200,
         "bytesize": 8,
         "parity": "N",
@@ -23,7 +23,7 @@
       "unit": "PSI",
       "protocol": "serial",
       "protocol_config": {
-        "port": "/dev/pts/3",
+        "port": "/dev/pts/9",
         "baudrate": 115200,
         "bytesize": 8,
         "parity": "N",
@@ -109,17 +109,24 @@
     "users": {
       "admin": {
         "password": "admin123",
-        "permissions": ["read", "write", "commands"]
+        "permissions": [
+          "read",
+          "write",
+          "commands"
+        ]
       },
       "operator": {
         "password": "operator123",
-        "permissions": ["read"]
+        "permissions": [
+          "read"
+        ]
       },
       "viewer": {
         "password": "viewer123",
-        "permissions": ["read"]
+        "permissions": [
+          "read"
+        ]
       }
     }
   }
 }
-
