@@ -2,6 +2,8 @@
 """
 Test Webhook POST Script
 Tests webhook notifications to a remote server
+
+Author: Mohammed Ismail AbdElmageid
 """
 import sys
 import os

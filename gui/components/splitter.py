@@ -1,5 +1,7 @@
 """
 Non-resizable splitter component
+
+Author: Mohammed Ismail AbdElmageid
 """
 from PyQt5.QtWidgets import QSplitter
 from PyQt5.QtCore import Qt, QEvent

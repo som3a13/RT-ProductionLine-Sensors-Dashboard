@@ -1,5 +1,7 @@
 """
 Unit tests for sensor data models, alarm logic, sensor parsing, and API output
+
+Author: Mohammed Ismail AbdElmageid
 """
 import pytest
 import json

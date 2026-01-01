@@ -2,6 +2,8 @@
 """
 Run Multiple TCP Sensor Clients
 Connects multiple sensors to different TCP servers with command-line arguments
+
+Author: Mohammed Ismail AbdElmageid
 """
 import sys
 import argparse
@@ -236,11 +238,13 @@ def parse_sensor_spec(spec: str):
 def get_defaults_for_type(sensor_type: str):
     """Get default values for sensor type"""
     defaults = {
-        'flow': {'low': 10.0, 'high': 100.0, 'unit': 'L/min', 'name': 'Flow Rate'},
-        'vibration': {'low': 0.0, 'high': 5.0, 'unit': 'mm/s', 'name': 'Vibration'},
-        'temperature': {'low': 20.0, 'high': 80.0, 'unit': '°C', 'name': 'Temperature'},
-        'pressure': {'low': 50.0, 'high': 150.0, 'unit': 'PSI', 'name': 'Pressure'},
-        'voltage': {'low': 200.0, 'high': 240.0, 'unit': 'V', 'name': 'Voltage'},
+                'flow': {'low': 10.0, 'high': 100.0, 'unit': 'L/min', 'name': 'Flow Rate'},
+                'vibration': {'low': 0.0, 'high': 5.0, 'unit': 'mm/s', 'name': 'Vibration'},
+                'temperature': {'low': 20.0, 'high': 80.0, 'unit': '°C', 'name': 'Temperature'},
+                'pressure': {'low': 50.0, 'high': 150.0, 'unit': 'PSI', 'name': 'Pressure'},
+                'voltage': {'low': 200.0, 'high': 240.0, 'unit': 'V', 'name': 'Voltage'},
+                'speed': {'low': 0.0, 'high': 600.0, 'unit': 'RPM', 'name': 'Speed'},
+                'optical': {'low': 50.0, 'high': 60.0, 'unit': '%', 'name': 'Optical'},
     }
     
     sensor_type_lower = sensor_type.lower()

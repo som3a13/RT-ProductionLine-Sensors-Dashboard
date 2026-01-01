@@ -1,28 +1,33 @@
 #!/usr/bin/env python3
 """
 Test script for desktop notifications on Linux Ubuntu and Windows
+
+Author: Mohammed Ismail AbdElmageid
 """
 import sys
-import os
+import json
+import platform
+from pathlib import Path
 from datetime import datetime
 
 # Add project root to path
-project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, project_root)
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
 
 from core.sensor_data import AlarmEvent
 from services.alarm_notifications import NotificationManager
-import json
 
 def test_desktop_notifications():
     """Test desktop notifications"""
     print("=" * 60)
     print("Desktop Notifications Test")
     print("=" * 60)
+    print(f"Platform: {platform.system()}")
+    print()
     
     # Load config
-    config_path = os.path.join(project_root, "config", "config.json")
-    with open(config_path, 'r') as f:
+    config_path = project_root / "config" / "config.json"
+    with open(config_path, 'r', encoding='utf-8') as f:
         config = json.load(f)
     
     # Enable desktop notifications
@@ -34,7 +39,10 @@ def test_desktop_notifications():
         print(f"   ✓ NotificationManager initialized")
         print(f"   - Desktop notifications enabled: {manager.desktop_enabled}")
         print(f"   - System tray available: {manager.tray_icon is not None}")
-        print(f"   - Using notify-send: {manager.use_system_notify}")
+        if manager.is_windows:
+            print(f"   - Windows toast available: {manager.win10toast_available}")
+        elif manager.is_linux:
+            print(f"   - Using notify-send: {manager.use_system_notify}")
     except Exception as e:
         print(f"   ✗ Error: {e}")
         return False
@@ -82,9 +90,13 @@ def test_desktop_notifications():
     print("Test completed!")
     print("=" * 60)
     print("\nIf you didn't see notifications:")
-    print("  - Linux: Make sure 'notify-send' is installed (sudo apt-get install libnotify-bin)")
-    print("  - Windows: Check Windows notification settings")
-    print("  - The application must be running for PyQt5 system tray to work")
+    if platform.system() == "Windows":
+        print("  - Windows: Check Windows notification settings (Settings > System > Notifications)")
+        print("  - Make sure win10toast is installed: pip install win10toast")
+        print("  - The application must be running for PyQt5 system tray to work")
+    else:
+        print("  - Linux: Make sure 'notify-send' is installed (sudo apt-get install libnotify-bin)")
+        print("  - The application must be running for PyQt5 system tray to work")
     print()
     
     return True

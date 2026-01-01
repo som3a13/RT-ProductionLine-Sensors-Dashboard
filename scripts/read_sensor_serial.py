@@ -3,6 +3,8 @@
 Script to read sensor data from PTY device
 Connects to PTY device and displays incoming sensor readings
 Supports simplified config string format
+
+Author: Mohammed Ismail AbdElmageid
 """
 import serial
 import json

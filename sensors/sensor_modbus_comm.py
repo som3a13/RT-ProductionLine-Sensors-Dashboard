@@ -13,6 +13,8 @@ Communication Architecture:
 - Each sensor has its own unit_id and register address
 - Value Encoding: 16-bit integer × 10 (e.g., 2205 = 220.5)
 - Negative values: Two's complement (e.g., 55546 = -999.0)
+
+Author: Mohammed Ismail AbdElmageid
 """
 import threading
 import queue
@@ -256,12 +258,16 @@ class ModbusSensorCommunicator:
             
             value = raw_value / 10.0  # Scale down
             
+            # Check if value indicates faulty sensor (-999.0)
+            is_faulty = (value == -999.0)
+            
             # Determine status
             with self.lock:
                 if config:
-                    status = config.get_status(value, False)
+                    status = config.get_status(value, is_faulty)
                 else:
-                    status = SensorStatus.OK
+                    # Without config, check if -999 (faulty) or use OK
+                    status = SensorStatus.FAULTY if is_faulty else SensorStatus.OK
             
             return SensorReading(
                 sensor_id=sensor_id,

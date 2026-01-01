@@ -2,6 +2,8 @@
 """
 Script to read and display complete Modbus/TCP frames
 Captures both request and response frames with full hex dump and decoding
+
+Author: Mohammed Ismail AbdElmageid
 """
 import socket
 import struct

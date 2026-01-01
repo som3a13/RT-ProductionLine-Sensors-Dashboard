@@ -1,5 +1,7 @@
 """
 Remote Maintenance Console - WebSocket server for remote access
+
+Author: Mohammed Ismail AbdElmageid
 """
 import asyncio
 import json

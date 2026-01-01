@@ -1,5 +1,7 @@
 """
 Simple test script to verify WebSocket server is working
+
+Author: Mohammed Ismail AbdElmageid
 """
 import asyncio
 import websockets

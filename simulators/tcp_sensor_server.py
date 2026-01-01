@@ -1,6 +1,8 @@
 """
 TCP Sensor Server - Modular TCP server that accepts sensor connections
 Sensors connect to this server as clients and send their data
+
+Author: Mohammed Ismail AbdElmageid
 """
 import socket
 import threading

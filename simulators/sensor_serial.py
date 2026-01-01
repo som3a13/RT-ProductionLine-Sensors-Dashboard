@@ -4,12 +4,15 @@ Supports multiple sensor types: temperature, pressure, flow, vibration, voltage
 - Linux: Uses PTY (pseudo-terminal) to create a fake serial port
 - Windows: Uses COM ports or TCP socket for simulation
 Configurable baudrate and serial parameters (8N1)
+
+Author: Mohammed Ismail AbdElmageid
 """
 import os
 import sys
 import time
 import json
 import random
+import re
 import threading
 import platform
 from datetime import datetime
@@ -93,6 +96,8 @@ def get_defaults_for_type(sensor_type: str):
         'temperature': {'low': 20.0, 'high': 80.0, 'unit': '°C', 'name': 'Temperature'},
         'pressure': {'low': 50.0, 'high': 150.0, 'unit': 'PSI', 'name': 'Pressure'},
         'voltage': {'low': 200.0, 'high': 240.0, 'unit': 'V', 'name': 'Voltage'},
+        'speed': {'low': 0.0, 'high': 600.0, 'unit': 'RPM', 'name': 'Speed'},
+        'optical': {'low': 50.0, 'high': 60.0, 'unit': '%', 'name': 'Optical'},
     }
     
     sensor_type_lower = sensor_type.lower()
@@ -384,7 +389,8 @@ class SerialSensorSimulator:
                     try:
                         self.serial_conn.write(frame)
                     except serial.SerialTimeoutException:
-                        print("Warning: Serial write timeout")
+                        # Serial write timeout - silently continue
+                        pass
                     except serial.SerialException as e:
                         print(f"Serial error: {e}")
                         break
@@ -499,6 +505,9 @@ Examples:
   python sensor_serial.py --config "temperature:1:115200:8N1" --com-port COM10
   python sensor_serial.py --sensor-id 1 --sensor-type temperature --com-port COM1
   
+  # Windows: Multiple sensors with different COM ports:
+  python sensor_serial.py --config "temperature:1:115200:8N1" --com-port COM20 --config "pressure:2:115200:8N1" --com-port COM22
+  
   # Windows: For virtual COM ports, install com0com to create COM port pairs
         """
     )
@@ -525,9 +534,11 @@ Examples:
     parser.add_argument('--bytesize', type=int, default=8, choices=[5, 6, 7, 8], help='Data bits (default: 8)')
     parser.add_argument('--parity', type=str, default='N', choices=['N', 'E', 'O'], help='Parity (default: N)')
     parser.add_argument('--stopbits', type=int, default=1, choices=[1, 2], help='Stop bits (default: 1)')
-    parser.add_argument('--com-port', type=str, default=None,
+    parser.add_argument('--com-port', type=str, default=None, action='append',
                         help='COM port name for Windows (REQUIRED on Windows, e.g., COM10, COM1).\n'
-                             'For virtual COM ports, install com0com or similar virtual serial port driver.')
+                             'Can be specified multiple times to assign different ports to each config.\n'
+                             'For virtual COM ports, install com0com or similar virtual serial port driver.\n'
+                             'Example: --config "temp:1:115200:8N1" --com-port COM20 --config "press:2:115200:8N1" --com-port COM22')
     
     args = parser.parse_args()
     
@@ -536,9 +547,25 @@ Examples:
     # If config strings are provided, create simulators for each
     if args.config:
         print(f"Creating {len(args.config)} sensor simulator(s)...\n")
-        for config_str in args.config:
+        
+        # Handle COM ports: if multiple provided, match by index; if single, use for all
+        com_ports = args.com_port if args.com_port else []
+        if len(com_ports) == 1 and len(args.config) > 1:
+            # Single COM port for all configs
+            com_ports = com_ports * len(args.config)
+        elif len(com_ports) > 1 and len(com_ports) != len(args.config):
+            print(f"Warning: Number of COM ports ({len(com_ports)}) doesn't match number of configs ({len(args.config)})")
+            print(f"Using first COM port for all simulators: {com_ports[0]}")
+            com_ports = [com_ports[0]] * len(args.config)
+        elif len(com_ports) == 0 and IS_WINDOWS:
+            print("Error: COM port is required on Windows. Please specify --com-port for each config.")
+            sys.exit(1)
+        
+        for idx, config_str in enumerate(args.config):
             try:
                 config = parse_config_string(config_str)
+                # Get the corresponding COM port for this config
+                com_port = com_ports[idx] if idx < len(com_ports) else (com_ports[0] if com_ports else None)
                 simulator = SerialSensorSimulator(
                     sensor_id=config['sensor_id'],
                     sensor_type=config['sensor_type'],
@@ -549,7 +576,7 @@ Examples:
                     bytesize=config['bytesize'],
                     parity=config['parity'],
                     stopbits=config['stopbits'],
-                    com_port=args.com_port
+                    com_port=com_port
                 )
                 simulators.append(simulator)
             except ValueError as e:
@@ -557,6 +584,8 @@ Examples:
                 sys.exit(1)
     else:
         # Use individual arguments (single simulator)
+        # Handle COM port: if list, use first; otherwise use as-is
+        com_port = args.com_port[0] if isinstance(args.com_port, list) and args.com_port else args.com_port
         simulator = SerialSensorSimulator(
             sensor_id=args.sensor_id,
             sensor_type=args.sensor_type,
@@ -567,7 +596,7 @@ Examples:
             bytesize=args.bytesize,
             parity=args.parity,
             stopbits=args.stopbits,
-            com_port=args.com_port
+            com_port=com_port
         )
         simulators.append(simulator)
     
@@ -586,7 +615,20 @@ Examples:
         print(f"\n{'='*60}")
         print("Sensor simulators ready. Worker threads should connect to:")
         for i, slave_name in enumerate(slave_names, 1):
-            print(f"  {i}. {slave_name}")
+            # On Windows with com0com, worker should use the paired port (COM20 -> COM21, COM22 -> COM23, etc.)
+            if IS_WINDOWS and slave_name and slave_name.upper().startswith("COM"):
+                # Extract port number and add 1 for the paired port
+                match = re.match(r'COM(\d+)', slave_name.upper())
+                if match:
+                    port_num = int(match.group(1))
+                    worker_port = f"COM{port_num + 1}"
+                    print(f"  {i}. {worker_port} (simulator is using {slave_name})")
+                else:
+                    worker_port = slave_name
+                    print(f"  {i}. {worker_port}")
+            else:
+                worker_port = slave_name
+                print(f"  {i}. {worker_port}")
         print(f"{'='*60}\n")
         print("All simulators running... Press Ctrl+C to stop all.\n")
     

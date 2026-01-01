@@ -2,6 +2,8 @@
 """
 Combined TCP Sensor System Launcher
 Starts TCP servers and connects sensor clients in one command
+
+Author: Mohammed Ismail AbdElmageid
 """
 import sys
 import argparse

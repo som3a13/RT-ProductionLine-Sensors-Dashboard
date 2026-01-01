@@ -1,5 +1,7 @@
 """
 Check if Modbus server is running and accessible
+
+Author: Mohammed Ismail AbdElmageid
 """
 import socket
 from pymodbus.client import ModbusTcpClient

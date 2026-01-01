@@ -12,6 +12,8 @@ Communication Architecture:
 - Protocol: One communicator per unique host:port combination
 - Multiple sensors can share same server (identified by sensor_id in JSON)
 - Server relays data from multiple sensor clients to application
+
+Author: Mohammed Ismail AbdElmageid
 """
 import socket
 import json
@@ -61,6 +63,8 @@ class TCPSensorCommunicator:
         """Add sensor configuration"""
         with self.lock:
             self.sensor_configs[sensor_id] = config
+            print(f"TCP {self.host}:{self.port}: Added config for sensor_id={sensor_id} ({config.name}). "
+                  f"Total configs: {list(self.sensor_configs.keys())}")
     
     def register_callback(self, callback: Callable):
         """Register callback for new sensor readings"""
@@ -148,7 +152,14 @@ class TCPSensorCommunicator:
     def _parse_sensor_data(self, data_dict: Dict) -> Optional[SensorReading]:
         """Parse sensor data from JSON dictionary"""
         try:
-            sensor_id = data_dict.get("sensor_id")
+            # Ensure sensor_id is an integer (JSON might have it as string or int)
+            sensor_id_raw = data_dict.get("sensor_id")
+            sensor_id = int(sensor_id_raw) if sensor_id_raw is not None else None
+            
+            if sensor_id is None:
+                print(f"Error: sensor_id is missing in data: {data_dict}")
+                return None
+                
             sensor_name = data_dict.get("sensor_name", f"Sensor {sensor_id}")
             value = float(data_dict.get("value", 0))
             timestamp_str = data_dict.get("timestamp")
@@ -172,6 +183,16 @@ class TCPSensorCommunicator:
                     config = self.sensor_configs[sensor_id]
                     status = config.get_status(value, is_faulty)
                 else:
+                    # Config not found - this shouldn't happen if sensor was properly added
+                    # But as fallback, check if value is -999 (faulty) or use OK
+                    # Note: Without config, we can't check alarm limits, so default to OK
+                    # This is a safety fallback - the sensor should have been configured
+                    print(f"Warning: Sensor config not found for sensor_id={sensor_id} (type: {type(sensor_id)}) "
+                          f"on TCP communicator {self.host}:{self.port}. "
+                          f"Status calculation may be incorrect. Value: {value}, "
+                          f"Available configs: {list(self.sensor_configs.keys())}")
+                    print(f"  This sensor's data is being received by the wrong TCP communicator!")
+                    print(f"  Expected: Check config.json - sensor_id={sensor_id} should use port matching this communicator")
                     status = SensorStatus.FAULTY if is_faulty else SensorStatus.OK
             
             return SensorReading(

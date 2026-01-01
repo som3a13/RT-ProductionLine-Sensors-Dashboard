@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Check which TCP servers are needed from config.json"""
+"""Check which TCP servers are needed from config.json
+
+Author: Mohammed Ismail AbdElmageid
+"""
 import json
 from pathlib import Path
 

@@ -1,5 +1,7 @@
 """
 Helper classes for GUI
+
+Author: Mohammed Ismail AbdElmageid
 """
 from PyQt5.QtCore import QObject, pyqtSignal
 

@@ -1,5 +1,7 @@
 """
 Test Modbus connection and reading
+
+Author: Mohammed Ismail AbdElmageid
 """
 from pymodbus.client import ModbusTcpClient
 import time

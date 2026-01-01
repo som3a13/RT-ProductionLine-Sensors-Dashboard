@@ -11,6 +11,8 @@ Communication Architecture:
 - Frame Format: JSON terminated by newline (\n)
 - Protocol: One communicator per unique serial port/TCP address
 - Multiple sensors can share same port (identified by sensor_id in JSON)
+
+Author: Mohammed Ismail AbdElmageid
 """
 import serial
 import serial.tools.list_ports
@@ -169,7 +171,14 @@ class SerialSensorCommunicator:
         """Parse sensor data from JSON message"""
         try:
             data = json.loads(message)
-            sensor_id = data.get("sensor_id")
+            # Ensure sensor_id is an integer (JSON might have it as string or int)
+            sensor_id_raw = data.get("sensor_id")
+            sensor_id = int(sensor_id_raw) if sensor_id_raw is not None else None
+            
+            if sensor_id is None:
+                print(f"Error: sensor_id is missing in data: {data}")
+                return None
+                
             sensor_name = data.get("sensor_name", f"Sensor {sensor_id}")
             value = float(data.get("value", 0))
             timestamp_str = data.get("timestamp")
@@ -193,6 +202,13 @@ class SerialSensorCommunicator:
                     config = self.sensor_configs[sensor_id]
                     status = config.get_status(value, is_faulty)
                 else:
+                    # Config not found - this shouldn't happen if sensor was properly added
+                    # But as fallback, check if value is -999 (faulty) or use OK
+                    # Note: Without config, we can't check alarm limits, so default to OK
+                    # This is a safety fallback - the sensor should have been configured
+                    print(f"Warning: Sensor config not found for sensor_id={sensor_id} (type: {type(sensor_id)}) in serial communicator. "
+                          f"Status calculation may be incorrect. Value: {value}, "
+                          f"Available configs: {list(self.sensor_configs.keys())}")
                     status = SensorStatus.FAULTY if is_faulty else SensorStatus.OK
             
             return SensorReading(

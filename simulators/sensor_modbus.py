@@ -3,6 +3,8 @@ Unified Modbus/TCP Sensor Simulator
 Supports multiple sensor types: temperature, pressure, flow, vibration, voltage
 Uses Modbus/TCP server to provide sensor data via holding registers
 Supports multiple sensors on the same port using different unit IDs
+
+Author: Mohammed Ismail AbdElmageid
 """
 import threading
 import time
@@ -81,6 +83,8 @@ def get_defaults_for_type(sensor_type: str):
         'temperature': {'low': 20.0, 'high': 80.0, 'unit': '°C', 'name': 'Temperature'},
         'pressure': {'low': 50.0, 'high': 150.0, 'unit': 'PSI', 'name': 'Pressure'},
         'voltage': {'low': 200.0, 'high': 240.0, 'unit': 'V', 'name': 'Voltage'},
+        'speed': {'low': 0.0, 'high': 600.0, 'unit': 'RPM', 'name': 'Speed'},
+        'optical': {'low': 50.0, 'high': 60.0, 'unit': '%', 'name': 'Optical'},
     }
     
     sensor_type_lower = sensor_type.lower()

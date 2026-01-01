@@ -1,5 +1,7 @@
 """
 Sensor Data Models and Alarm Logic
+
+Author: Mohammed Ismail AbdElmageid
 """
 from dataclasses import dataclass
 from datetime import datetime
@@ -49,6 +51,11 @@ class SensorConfig:
     
     def check_alarm(self, value: float) -> Optional[AlarmEvent]:
         """Check if value triggers an alarm and return AlarmEvent if so"""
+        # -999.0 indicates a faulty sensor, not an alarm
+        # Faulty sensors are handled separately, so don't create alarm events for them
+        if value == -999.0:
+            return None
+        
         if value < self.low_limit:
             return AlarmEvent(
                 timestamp=datetime.now(),
@@ -71,7 +78,9 @@ class SensorConfig:
     
     def get_status(self, value: float, is_faulty: bool = False) -> SensorStatus:
         """Get sensor status based on value"""
-        if is_faulty:
+        # -999.0 always indicates a faulty sensor, regardless of alarm limits
+        # This takes priority over all other status checks
+        if is_faulty or value == -999.0:
             return SensorStatus.FAULTY
         if value < self.low_limit:
             return SensorStatus.LOW_ALARM

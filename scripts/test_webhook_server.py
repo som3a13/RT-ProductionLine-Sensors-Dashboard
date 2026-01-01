@@ -2,6 +2,8 @@
 """
 Simple Webhook Test Server
 Receives POST requests from webhook and displays the data
+
+Author: Mohammed Ismail AbdElmageid
 """
 import http.server
 import socketserver

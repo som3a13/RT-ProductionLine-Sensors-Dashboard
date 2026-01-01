@@ -1,9 +1,13 @@
 """
 Main GUI Application - Production Line Monitoring System
+
+Author: Mohammed Ismail AbdElmageid
 """
 import sys
 import json
 import math
+import os
+from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Dict, List
 from collections import deque
@@ -194,10 +198,9 @@ class MainWindow(QMainWindow):
     
     def apply_stylesheet(self):
         """Load and apply stylesheet from file"""
-        import os
-        stylesheet_path = os.path.join(os.path.dirname(__file__), 'stylesheet', 'styles.qss')
+        stylesheet_path = Path(__file__).parent / 'stylesheet' / 'styles.qss'
         try:
-            with open(stylesheet_path, 'r') as f:
+            with open(stylesheet_path, 'r', encoding='utf-8') as f:
                 stylesheet = f.read()
                 self.setStyleSheet(stylesheet)
         except FileNotFoundError:
@@ -208,14 +211,13 @@ class MainWindow(QMainWindow):
     
     def set_application_icon(self):
         """Set application icon from fav.png"""
-        import os
         # Get project root directory
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        project_root = os.path.dirname(script_dir)
-        icon_path = os.path.join(project_root, 'fav.png')
+        script_dir = Path(__file__).parent
+        project_root = script_dir.parent
+        icon_path = project_root / 'fav.png'
         
-        if os.path.exists(icon_path):
-            icon = QIcon(icon_path)
+        if icon_path.exists():
+            icon = QIcon(str(icon_path))
             self.setWindowIcon(icon)
             # Also set for the application
             QApplication.setWindowIcon(icon)
@@ -224,10 +226,9 @@ class MainWindow(QMainWindow):
     
     def load_config(self) -> dict:
         """Load configuration from config.json"""
-        import os
-        config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config", "config.json")
+        config_path = Path(__file__).parent.parent / "config" / "config.json"
         try:
-            with open(config_path, "r") as f:
+            with open(config_path, "r", encoding='utf-8') as f:
                 return json.load(f)
         except FileNotFoundError:
             QMessageBox.warning(self, "Config Error", 
@@ -2313,7 +2314,7 @@ class MainWindow(QMainWindow):
             
             QMessageBox.information(self, "Export Successful", 
                                   f"Alarm log exported successfully to:\n{filepath}")
-            self.statusBar().showMessage(f"Alarm log exported to {os.path.basename(filepath)}", 5000)
+            self.statusBar().showMessage(f"Alarm log exported to {Path(filepath).name}", 5000)
         except Exception as e:
             QMessageBox.critical(self, "Export Error", 
                                f"Failed to export alarm log:\n{str(e)}")
@@ -2366,7 +2367,7 @@ class MainWindow(QMainWindow):
             
             QMessageBox.information(self, "Export Successful", 
                                   f"Alarm log exported successfully to:\n{filepath}")
-            self.statusBar().showMessage(f"Alarm log exported to {os.path.basename(filepath)}", 5000)
+            self.statusBar().showMessage(f"Alarm log exported to {Path(filepath).name}", 5000)
         except Exception as e:
             QMessageBox.critical(self, "Export Error", 
                                f"Failed to export alarm log:\n{str(e)}")
@@ -2459,8 +2460,8 @@ class MainWindow(QMainWindow):
             http_port = console_config.get("http_port", 8080)
             
             # Get project root directory
-            script_dir = os.path.dirname(os.path.abspath(__file__))
-            project_root = os.path.dirname(script_dir)
+            script_dir = Path(__file__).parent
+            project_root = script_dir.parent
             
             # Get WebSocket URL from config
             ws_host = console_config.get("host", "localhost")
@@ -2471,7 +2472,7 @@ class MainWindow(QMainWindow):
                 """Custom HTTP request handler"""
                 
                 def __init__(self, *args, **kwargs):
-                    super().__init__(*args, directory=project_root, **kwargs)
+                    super().__init__(*args, directory=str(project_root), **kwargs)
                 
                 def end_headers(self):
                     # Add CORS headers
@@ -2492,8 +2493,8 @@ class MainWindow(QMainWindow):
                     if self.path == '/favicon.ico' or self.path == '/fav.png':
                         try:
                             # Load favicon from fav.png file
-                            favicon_path = os.path.join(project_root, 'fav.png')
-                            if os.path.exists(favicon_path):
+                            favicon_path = project_root / 'fav.png'
+                            if favicon_path.exists():
                                 with open(favicon_path, 'rb') as f:
                                     icon_data = f.read()
                                 
@@ -2518,7 +2519,7 @@ class MainWindow(QMainWindow):
                     # Inject WebSocket URL into HTML file
                     if self.path == '/web/remote_console_client.html' or self.path == '/web/remote_console_client.html/':
                         try:
-                            html_path = os.path.join(project_root, 'web', 'remote_console_client.html')
+                            html_path = project_root / 'web' / 'remote_console_client.html'
                             with open(html_path, 'r', encoding='utf-8') as f:
                                 html_content = f.read()
                             

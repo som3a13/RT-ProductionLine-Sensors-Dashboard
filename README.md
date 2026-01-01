@@ -40,6 +40,179 @@ A comprehensive real-time monitoring and maintenance system for industrial produ
 - ✅ **Custom Application Icon**: Professional branding with custom icon and favicon
 - ✅ **Responsive Layout**: Optimized layout with sensor table on left, plots on right
 
+## 🚀 Quick Start
+
+### Prerequisites
+
+- **Python 3.8 or higher** (use `python3` command)
+- **pip3** for installing dependencies
+- **Linux** (Ubuntu recommended) or **Windows**
+- Internet connection (for installing packages)
+
+### Step 1: Install Dependencies
+
+```bash
+# Make sure you're in the project directory
+cd /path/to/RT-ProductionLine-Sensors-Dashboard
+
+# Install all required packages using pip3
+pip3 install -r requirements.txt
+```
+
+**Note:** Use `python3` and `pip3` commands (not `python` or `pip`) to ensure you're using Python 3.
+
+### Step 2: Configure Sensors
+
+**Important:** Before starting simulators, ensure your `config/config.json` matches the sensor IDs, ports, and protocols you'll use in the simulator commands below.
+
+Your `config/config.json` should have sensors configured like this (matching the simulators you'll start):
+
+```json
+{
+  "sensors": [
+    {
+      "name": "Flow Rate Sensor 1",
+      "id": 3,
+      "low_limit": 10.0,
+      "high_limit": 100.0,
+      "unit": "L/min",
+      "protocol": "tcp",
+      "protocol_config": {
+        "host": "localhost",
+        "port": 5000
+      }
+    },
+    {
+      "name": "Flow Rate Sensor 2",
+      "id": 6,
+      "low_limit": 10.0,
+      "high_limit": 100.0,
+      "unit": "L/min",
+      "protocol": "tcp",
+      "protocol_config": {
+        "host": "localhost",
+        "port": 5001
+      }
+    },
+    {
+      "name": "Vibration Sensor 1",
+      "id": 4,
+      "low_limit": 0.0,
+      "high_limit": 5.0,
+      "unit": "mm/s",
+      "protocol": "tcp",
+      "protocol_config": {
+        "host": "localhost",
+        "port": 5000
+      }
+    },
+    {
+      "name": "Voltage Sensor 1",
+      "id": 5,
+      "low_limit": 200.0,
+      "high_limit": 240.0,
+      "unit": "V",
+      "protocol": "modbus",
+      "protocol_config": {
+        "host": "localhost",
+        "port": 1502,
+        "unit_id": 1,
+        "register": 0
+      }
+    },
+    {
+      "name": "Pressure Sensor 2",
+      "id": 7,
+      "low_limit": 50.0,
+      "high_limit": 150.0,
+      "unit": "PSI",
+      "protocol": "modbus",
+      "protocol_config": {
+        "host": "localhost",
+        "port": 1502,
+        "unit_id": 2,
+        "register": 0
+      }
+    }
+  ]
+}
+```
+
+**⚠️ Critical:** The sensor IDs, ports, and protocols in `config.json` **must match** the simulators you start below!
+
+### Step 3: Start Sensor Simulators
+
+Open **separate terminal windows** for each command. Run them in this order:
+
+#### Terminal 1: Modbus Sensors
+
+```bash
+python3 ./simulators/sensor_modbus.py --config "voltage:5:localhost:1502:1:0" --config "pressure:7:localhost:1502:2:0"
+```
+
+#### Terminal 2: TCP Sensors
+
+```bash
+python3 ./simulators/start_tcp_system.py --server-ports 5000 5001 --sensor flow:3:localhost:5000 --sensor vibration:4:localhost:5000 --sensor flow:6:localhost:5001
+```
+
+**Note:** For serial sensors (Linux), you would also run:
+```bash
+python3 ./simulators/sensor_serial.py --config "temperature:1:115200:8N1" --config "pressure:2:115200:8N1"
+```
+Then update `config.json` with the PTY paths shown in the output (e.g., `/dev/pts/2`).
+
+**Windows users:** For serial sensors, you need to:
+1. **Install com0com first** (for virtual COM ports):
+   - Double-click `install_com0com_simple.bat` in the project root
+   - The script will request Administrator privileges and install com0com automatically
+   - After installation, use `setupc.exe` to create COM port pairs (e.g., COM10 <-> COM11)
+2. **Then run the simulator** with `--com-port`:
+```bash
+python3 ./simulators/sensor_serial.py --config "temperature:1:115200:8N1" --com-port COM10
+```
+   - Use the COM port in `config.json` (e.g., `"port": "COM11"` if simulator uses COM10)
+
+### Step 4: Start Webhook Server (Optional)
+
+If you want to test webhook notifications, start the webhook server in **Terminal 3**:
+
+```bash
+python3 ./scripts/test_webhook_server.py
+```
+
+This starts a test webhook server on `http://localhost:3000/webhook` (as configured in `config.json`).
+
+### Step 5: Start Main Application
+
+In **Terminal 4** (or your main terminal), start the GUI application:
+
+```bash
+python3 main.py
+```
+
+### Step 6: Connect to Sensors
+
+1. The GUI application will open
+2. Click the **"Connect"** button in the Dashboard tab
+3. Real-time sensor data will start appearing
+4. Monitor the dashboard for sensor readings, plots, and alarms
+
+### Quick Start Summary
+
+**Order of execution:**
+1. ✅ Install dependencies: `pip3 install -r requirements.txt`
+2. ✅ Configure `config/config.json` to match your simulators (sensor IDs, ports, protocols)
+3. ✅ Start Modbus sensors (Terminal 1)
+4. ✅ Start TCP sensors (Terminal 2)
+5. ✅ Start webhook server (Terminal 3, optional)
+6. ✅ Start main application: `python3 main.py` (Terminal 4)
+7. ✅ Click "Connect" button in GUI
+
+**All commands use `python3`** - Make sure Python 3.8+ is installed and accessible via `python3` command.
+
+---
+
 ## 📋 Project Structure
 
 ```
@@ -124,11 +297,11 @@ RT-ProductionLine-Sensors-Dashboard/
 └── Si-Ware_System_-_PE_Assesment_v3.pdf # Assessment document
 ```
 
-## 🛠️ Setup Steps
+## 🛠️ Detailed Setup Steps
 
 ### Prerequisites
 
-- Python 3.8 or higher
+- Python 3.8 or higher (use `python3` command)
 - **Linux** (Ubuntu recommended): Full support with PTY for serial sensors
 - **Windows**: Full support with TCP sockets for serial sensors (automatic fallback)
 - Internet connection (for installing packages)
@@ -142,7 +315,8 @@ cd /path/to/RT-ProductionLine-Sensors-Dashboard
 ### Step 2: Install Dependencies
 
 ```bash
-pip install -r requirements.txt
+# Use pip3 to ensure Python 3 packages are installed
+pip3 install -r requirements.txt
 ```
 
 **Required Packages:**
@@ -171,7 +345,7 @@ This script verifies:
 
 ### Step 4: Configure Sensors
 
-Edit `config/config.json` to configure your sensors:
+Edit `config/config.json` to configure your sensors. **Important:** The sensor IDs, ports, and protocols must match the simulators you start.
 
 1. **Add Sensor Definitions**: Add sensor entries to the `sensors` array
 2. **Set Alarm Limits**: Configure `low_limit` and `high_limit` for each sensor
@@ -182,9 +356,11 @@ See [Configuration](#-configuration) section for detailed examples.
 
 ## 🚀 Running Instructions
 
+> **💡 Quick Start Available:** For a faster setup with pre-configured commands, see the [Quick Start](#-quick-start) section above.
+
 ### Step 1: Start Sensor Simulators
 
-Start sensor simulators based on your configuration. You can run multiple simulators concurrently:
+Start sensor simulators based on your configuration. You can run multiple simulators concurrently. **Use `python3` for all commands:**
 
 #### Serial Sensors
 
@@ -203,6 +379,11 @@ python3 simulators/sensor_serial.py \
 
 **Windows (COM Port - Required):**
 
+**Before running serial sensors on Windows, install com0com:**
+1. Double-click `install_com0com_simple.bat` in the project root
+2. The script will request Administrator privileges and install com0com automatically
+3. After installation, use `setupc.exe` to create COM port pairs (e.g., COM10 <-> COM11)
+
 ```cmd
 # Single sensor with COM port (COM port is REQUIRED)
 python simulators\sensor_serial.py --config "temperature:1:115200:8N1" --com-port COM10
@@ -211,14 +392,17 @@ python simulators\sensor_serial.py --config "temperature:1:115200:8N1" --com-por
 python simulators\sensor_serial.py --config "temperature:1:115200:8N1" --com-port COM10
 python simulators\sensor_serial.py --config "pressure:2:115200:8N1" --com-port COM11
 
-# For virtual COM ports, install com0com to create COM port pairs
 # If --com-port is not specified, the simulator will error and require it
 ```
 
 **Important:**
 
 - **Linux**: Note the PTY path printed when serial simulators start (e.g., `Device: /dev/pts/9`) and update `config/config.json` with the correct paths.
-- **Windows (COM Port - Required)**: COM port is **required** on Windows. Use `--com-port COM10` to specify a COM port. Use the same COM port in `config/config.json` (e.g., `"port": "COM10"`). For virtual COM ports, install `com0com`.
+- **Windows (COM Port - Required)**: 
+  - **Install com0com first**: Use `install_com0com_simple.bat` to install virtual COM port driver
+  - COM port is **required** on Windows. Use `--com-port COM10` to specify a COM port
+  - Use the paired COM port in `config/config.json` (e.g., if simulator uses COM10, use COM11 in config.json)
+  - For real COM ports, use the actual COM port name directly
 
 #### TCP Sensors
 
@@ -250,7 +434,17 @@ After starting simulators, update `config/config.json`:
 2. **TCP Sensors**: Verify `protocol_config.host` and `protocol_config.port` match your TCP servers
 3. **Modbus Sensors**: Verify `protocol_config.host`, `protocol_config.port`, `protocol_config.unit_id`, and `protocol_config.register`
 
-### Step 3: Start Main Application
+### Step 3: Start Webhook Server (Optional)
+
+If you want to test webhook notifications:
+
+```bash
+python3 ./scripts/test_webhook_server.py
+```
+
+This starts a test webhook server on `http://localhost:3000/webhook` (as configured in `config.json`).
+
+### Step 4: Start Main Application
 
 ```bash
 python3 main.py
@@ -263,14 +457,14 @@ The GUI application will:
 - Start the HTTP server for web interface (port 8080)
 - Display the main window with Dashboard tab
 
-### Step 4: Connect to Sensors
+### Step 5: Connect to Sensors
 
 1. Click the **"Connect"** button in the Dashboard tab
 2. The system will connect to all configured sensors
 3. Real-time data will start appearing in the sensor table and plots
 4. Check the global system health indicator for overall status
 
-### Step 5: Access Features
+### Step 6: Access Features
 
 #### Desktop Application
 
@@ -440,6 +634,8 @@ Edit `config/config.json` to configure:
 
 - **Linux**: Serial over Pseudo-Terminal (PTY) - creates `/dev/pts/X` devices
 - **Windows**: COM ports (e.g., COM10, COM1) - COM port is required, use `--com-port COM10`
+  - **For virtual COM ports**: Install com0com using `install_com0com_simple.bat` (double-click the file in project root)
+  - **For real COM ports**: Use actual COM port names (COM1, COM2, etc.)
 
 **Platform Detection:** The simulator automatically detects the platform and uses the appropriate method.
 
@@ -837,7 +1033,7 @@ python3 scripts/test_websocket.py
 
 ## 📄 License
 
-This project is part of the Si-Ware Production Line Monitoring System.
+This project is part of the Si-Ware Production Line Monitoring System Test.
 
 ## 👥 Support
 

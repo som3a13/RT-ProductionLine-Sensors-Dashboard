@@ -2,6 +2,8 @@
 Unified Sensor Communication Manager
 Manages multiple sensors across different protocols (Serial, TCP, Modbus)
 All communication happens in worker threads, GUI updates via thread-safe queues/signals
+
+Author: Mohammed Ismail AbdElmageid
 """
 import threading
 from typing import Dict, List, Optional
@@ -70,11 +72,21 @@ class SensorManager(QObject):
                     comm = TCPSensorCommunicator(host=host, port=port)
                     comm.register_callback(self._on_reading_received)
                     self.tcp_communicators[key] = comm
+                    print(f"Created new TCP communicator for {host}:{port} (key: {key})")
                 else:
                     comm = self.tcp_communicators[key]
+                    print(f"Using existing TCP communicator for {host}:{port} (key: {key})")
                 
                 comm.add_sensor_config(sensor_id, config)
                 self.sensor_protocol_map[sensor_id] = key
+                print(f"Added sensor_id={sensor_id} ({config.name}) to TCP communicator {host}:{port}")
+                
+                # Verify the config was added
+                with comm.lock:
+                    if sensor_id in comm.sensor_configs:
+                        print(f"  ✓ Verified: sensor_id={sensor_id} is in communicator configs")
+                    else:
+                        print(f"  ✗ ERROR: sensor_id={sensor_id} NOT found in communicator configs! Available: {list(comm.sensor_configs.keys())}")
                 
             elif protocol == "modbus":
                 host = protocol_config.get("host", "localhost")
