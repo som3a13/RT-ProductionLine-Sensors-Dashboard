@@ -8,13 +8,16 @@ Author: Mohammed Ismail AbdElmageid
 import http.server
 import socketserver
 import json
+import threading
 from datetime import datetime
 from urllib.parse import urlparse
 
 
 # Global storage for webhook data (in production, use a database)
 webhook_data = []
-MAX_RECORDS = 50  # Keep last 50 webhook requests
+MAX_RECORDS = 500  # Keep last 500 webhook requests (increased from 50)
+_request_counter = 0  # Total request counter (never resets)
+_data_lock = threading.Lock()  # Thread lock for thread-safe data access
 
 
 class WebhookHandler(http.server.SimpleHTTPRequestHandler):
@@ -35,6 +38,8 @@ class WebhookHandler(http.server.SimpleHTTPRequestHandler):
     
     def do_POST(self):
         """Handle POST requests (webhook)"""
+        global webhook_data, _request_counter
+        
         try:
             # Get content length
             content_length = int(self.headers.get('Content-Length', 0))
@@ -48,23 +53,30 @@ class WebhookHandler(http.server.SimpleHTTPRequestHandler):
                     data = json.loads(body.decode('utf-8'))
                     received_time = datetime.now()
                     
-                    # Store webhook data
-                    webhook_record = {
-                        "received_at": received_time.isoformat(),
-                        "client": f"{self.client_address[0]}:{self.client_address[1]}",
-                        "path": self.path,
-                        "data": data
-                    }
-                    webhook_data.insert(0, webhook_record)  # Add to beginning
-                    if len(webhook_data) > MAX_RECORDS:
-                        webhook_data.pop()  # Remove oldest if exceeds limit
+                    # Thread-safe: Increment counter and store webhook data
+                    with _data_lock:
+                        _request_counter += 1
+                        request_number = _request_counter
+                        
+                        # Store webhook data
+                        webhook_record = {
+                            "received_at": received_time.isoformat(),
+                            "client": f"{self.client_address[0]}:{self.client_address[1]}",
+                            "path": self.path,
+                            "data": data,
+                            "request_number": request_number
+                        }
+                        webhook_data.insert(0, webhook_record)  # Add to beginning
+                        if len(webhook_data) > MAX_RECORDS:
+                            webhook_data.pop()  # Remove oldest if exceeds limit
                     
                     print("\n" + "=" * 60)
-                    print("WEBHOOK POST REQUEST RECEIVED")
+                    print(f"WEBHOOK POST REQUEST RECEIVED (#{request_number})")
                     print("=" * 60)
                     print(f"Time: {received_time.strftime('%Y-%m-%d %H:%M:%S')}")
                     print(f"Path: {self.path}")
                     print(f"Client: {self.client_address[0]}:{self.client_address[1]}")
+                    print(f"Request #: {request_number}")
                     print("\nJSON Payload:")
                     print(json.dumps(data, indent=2))
                     print("\nParsed Data:")
@@ -120,20 +132,28 @@ class WebhookHandler(http.server.SimpleHTTPRequestHandler):
     
     def do_GET(self):
         """Handle GET requests - show server info and webhook data"""
+        global webhook_data, _request_counter
+        
         self.send_response(200)
         self.send_header('Content-Type', 'text/html; charset=utf-8')
         self.end_headers()
         
+        # Thread-safe: Get current data snapshot
+        with _data_lock:
+            current_data = webhook_data.copy()
+            total_requests = _request_counter
+        
         # Generate webhook data HTML
         webhook_list_html = ""
-        if webhook_data:
-            for i, record in enumerate(webhook_data):
+        if current_data:
+            for i, record in enumerate(current_data):
                 data = record['data']
                 received_at = datetime.fromisoformat(record['received_at']).strftime('%Y-%m-%d %H:%M:%S')
+                request_num = record.get('request_number', len(current_data) - i)
                 webhook_list_html += f"""
                 <div class="webhook-item">
                     <div class="webhook-header">
-                        <span class="webhook-number">#{len(webhook_data) - i}</span>
+                        <span class="webhook-number">#{request_num}</span>
                         <span class="webhook-time">{received_at}</span>
                     </div>
                     <div class="webhook-details">
@@ -209,7 +229,8 @@ class WebhookHandler(http.server.SimpleHTTPRequestHandler):
                     <p><strong>Endpoint:</strong> <code>POST /webhook</code></p>
                     <p><strong>Port:</strong> <code>3000</code></p>
                     <p><strong>URL:</strong> <code>http://localhost:3000/webhook</code></p>
-                    <p><strong>Total Requests:</strong> <span class="count-badge">{len(webhook_data)}</span></p>
+                    <p><strong>Total Requests:</strong> <span class="count-badge">{total_requests}</span></p>
+                    <p><strong>Stored Records:</strong> <span class="count-badge">{len(current_data)}</span> (showing last {MAX_RECORDS} records)</p>
                 </div>
                 <p>This server receives POST requests and displays the data below. Page auto-refreshes every 5 seconds.</p>
                 <p>Configure your webhook URL in <code>config/config.json</code>:</p>
@@ -240,7 +261,13 @@ def main():
     print("=" * 60 + "\n")
     
     try:
-        with socketserver.TCPServer(("", PORT), WebhookHandler) as httpd:
+        # Use ThreadingTCPServer to handle concurrent requests
+        # This prevents the server from failing when handling multiple requests
+        with socketserver.ThreadingTCPServer(("", PORT), WebhookHandler) as httpd:
+            # Allow address reuse to prevent "Address already in use" errors
+            httpd.allow_reuse_address = True
+            print("Server is using multi-threaded mode (ThreadingTCPServer)")
+            print("This allows handling multiple concurrent requests without failures.\n")
             httpd.serve_forever()
     except KeyboardInterrupt:
         print("\n\nServer stopped by user")
