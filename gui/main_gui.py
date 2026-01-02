@@ -7,6 +7,7 @@ import sys
 import json
 import math
 import os
+import resource
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Dict, List
@@ -1764,7 +1765,10 @@ class MainWindow(QMainWindow):
         self.previous_sensor_status[alarm.sensor_id] = current_status
         
         # Always add to alarm log (even if not a transition, for historical record)
+        # Limit alarm log size to prevent memory issues (keep last 1000 alarms)
         self.alarm_log.append(alarm)
+        if len(self.alarm_log) > 1000:
+            self.alarm_log.pop(0)  # Remove oldest alarm
         
         # Update sensor statistics
         if alarm.sensor_id in self.sensor_stats:
@@ -2438,6 +2442,16 @@ class MainWindow(QMainWindow):
                 except (KeyboardInterrupt, SystemExit):
                     # Normal shutdown
                     pass
+                except RuntimeError as e:
+                    # Handle event loop stopped externally (normal shutdown)
+                    if "Event loop stopped" in str(e) or "Event loop is closed" in str(e):
+                        # Normal shutdown, don't print error
+                        pass
+                    else:
+                        print(f"Remote console error: {e}")
+                        import traceback
+                        traceback.print_exc()
+                    self.console_started = False
                 except Exception as e:
                     print(f"Remote console error: {e}")
                     import traceback
@@ -2668,23 +2682,46 @@ class MainWindow(QMainWindow):
     
     def closeEvent(self, event):
         """Handle window close event"""
-        self.sensor_manager.disconnect_all()
+        try:
+            # Disconnect all sensors first
+            self.sensor_manager.disconnect_all()
+            
+            # Stop HTTP server
+            if self.http_server:
+                try:
+                    self.http_server.shutdown()
+                except:
+                    pass
+            
+            # Stop remote console event loop gracefully
+            if self.remote_console and hasattr(self, 'console_loop') and self.console_loop:
+                try:
+                    if not self.console_loop.is_closed():
+                        # Cancel all pending tasks
+                        pending = asyncio.all_tasks(self.console_loop)
+                        for task in pending:
+                            if not task.done():
+                                task.cancel()
+                        
+                        # Stop the event loop
+                        if self.console_loop.is_running():
+                            self.console_loop.call_soon_threadsafe(self.console_loop.stop)
+                        
+                        # Wait a bit for cleanup (non-blocking)
+                        if self.console_thread and self.console_thread.is_alive():
+                            self.console_thread.join(timeout=1.0)
+                except Exception as e:
+                    print(f"Error stopping remote console: {e}")
+            
+            # Stop all timers
+            if hasattr(self, 'update_timer') and self.update_timer:
+                self.update_timer.stop()
+            if hasattr(self, 'plot_update_timer') and self.plot_update_timer:
+                self.plot_update_timer.stop()
+            
+        except Exception as e:
+            print(f"Error during cleanup: {e}")
         
-        # Stop HTTP server
-        if self.http_server:
-            try:
-                self.http_server.shutdown()
-            except:
-                pass
-        
-        # Stop remote console
-        if self.remote_console and hasattr(self, 'console_loop') and self.console_loop:
-            try:
-                # Stop the event loop
-                if self.console_loop.is_running():
-                    self.console_loop.call_soon_threadsafe(self.console_loop.stop)
-            except Exception:
-                pass
         event.accept()
     
     def update_reports_plots(self, metrics: dict):
@@ -2777,7 +2814,44 @@ def main():
         # Use ProactorEventLoopPolicy on Windows for better compatibility
         asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
     
-    app = QApplication(sys.argv)
+    # Check for headless mode (no display)
+    if sys.platform != 'win32':
+        if 'DISPLAY' not in os.environ:
+            # Try to use offscreen platform if available
+            if 'QT_QPA_PLATFORM' not in os.environ:
+                os.environ['QT_QPA_PLATFORM'] = 'offscreen'
+                print("Warning: No DISPLAY detected, using offscreen platform")
+        
+        # Set resource limits to prevent issues (Linux only)
+        try:
+            import resource
+            # Increase soft limit for open file descriptors if needed
+            soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+            if soft < 1024:
+                resource.setrlimit(resource.RLIMIT_NOFILE, (min(1024, hard), hard))
+        except (OSError, ValueError, ImportError):
+            pass  # Ignore if we can't set limits
+    else:
+        # Windows: Check for headless/server environment
+        if 'QT_QPA_PLATFORM' not in os.environ:
+            try:
+                # Check if we're running without a console (headless/service mode)
+                import ctypes
+                kernel32 = ctypes.windll.kernel32
+                if kernel32.GetConsoleWindow() == 0:
+                    # No console window detected, might be headless
+                    # Use minimal platform to reduce resource usage
+                    os.environ['QT_QPA_PLATFORM'] = 'windows:darkmode=0'
+                    print("Warning: Running in headless environment on Windows")
+            except (ImportError, OSError, AttributeError):
+                pass  # Ignore if we can't detect or ctypes not available
+    
+    try:
+        app = QApplication(sys.argv)
+    except Exception as e:
+        print(f"Error creating QApplication: {e}")
+        print("If running headless, ensure QT_QPA_PLATFORM=offscreen is set")
+        sys.exit(1)
     
     # Set application icon early (before creating window) for taskbar icon
     # This ensures the icon appears in taskbar on both Windows and Linux

@@ -449,26 +449,58 @@ def start_main_application():
     
     cmd = [sys.executable, str(PROJECT_ROOT / "main.py")]
     
+    # For GUI applications, don't redirect stdout/stderr to prevent pipe buffer issues
+    # Instead, let output go to the terminal or use DEVNULL for headless
+    # Check if running in headless environment
+    env = os.environ.copy()
+    if sys.platform != 'win32':
+        # On Linux, check for DISPLAY variable
+        if 'DISPLAY' not in env:
+            # No display available, set offscreen platform
+            env['QT_QPA_PLATFORM'] = 'offscreen'
+            print("  Note: No DISPLAY detected, using offscreen platform")
+        # Set unbuffered output for Linux
+        env['PYTHONUNBUFFERED'] = '1'
+    else:
+        # Windows: Set unbuffered output to prevent buffering issues
+        env['PYTHONUNBUFFERED'] = '1'
+        # Windows: Check if running in headless/server environment
+        # On Windows Server or without GUI, we might need special handling
+        if 'QT_QPA_PLATFORM' not in env:
+            # Check if we're in a headless environment (no console window)
+            try:
+                # Try to detect if we're in a service or headless environment
+                import ctypes
+                # Check if we have a console window
+                kernel32 = ctypes.windll.kernel32
+                if kernel32.GetConsoleWindow() == 0:
+                    # No console window, might be headless
+                    env['QT_QPA_PLATFORM'] = 'windows:darkmode=0'
+                    print("  Note: Running in headless environment on Windows")
+            except:
+                pass  # Ignore if we can't detect
+    
+    # Don't redirect stdout/stderr to prevent pipe buffer filling up
+    # This allows the GUI to write to console if needed, and prevents hangs
     proc = subprocess.Popen(
         cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
+        stdout=None,  # Let it go to terminal
+        stderr=None,  # Let it go to terminal
         text=True,
-        bufsize=1,
-        cwd=str(PROJECT_ROOT)
+        cwd=str(PROJECT_ROOT),
+        env=env
     )
     processes.append(proc)
     
-    # Print initial output
-    time.sleep(2)
-    for _ in range(10):
-        line = proc.stdout.readline()
-        if line:
-            print(line.rstrip())
-        else:
-            break
+    # Give it a moment to start
+    time.sleep(1)
     
-    print(f"[OK] Main application started")
+    # Check if process is still running
+    if proc.poll() is None:
+        print(f"[OK] Main application started (PID: {proc.pid})")
+    else:
+        print(f"[ERROR] Main application exited immediately with code {proc.returncode}")
+    
     return proc
 
 
@@ -665,7 +697,23 @@ Examples:
             # Check if any process has died
             for i, proc in enumerate(processes):
                 if proc.poll() is not None:
-                    print(f"\nWarning: Process {i} has exited with code {proc.returncode}")
+                    exit_code = proc.returncode
+                    if exit_code is not None:
+                        # Negative exit codes indicate signals (e.g., -11 = SIGSEGV, -9 = SIGKILL)
+                        if exit_code < 0:
+                            signal_name = {
+                                -11: "SIGSEGV (Segmentation fault)",
+                                -9: "SIGKILL (Killed)",
+                                -15: "SIGTERM (Terminated)",
+                                -2: "SIGINT (Interrupted)"
+                            }.get(exit_code, f"Signal {abs(exit_code)}")
+                            print(f"\n[ERROR] Process {i} crashed with {signal_name} (exit code: {exit_code})")
+                            print(f"  This usually indicates:")
+                            print(f"    - Memory issue (SIGSEGV): Check for memory leaks or invalid memory access")
+                            print(f"    - Out of memory (SIGKILL): Process was killed by OOM killer")
+                            print(f"    - Segmentation fault: Check for threading or resource issues")
+                        else:
+                            print(f"\nWarning: Process {i} has exited with code {exit_code}")
     except KeyboardInterrupt:
         signal_handler(None, None)
 
