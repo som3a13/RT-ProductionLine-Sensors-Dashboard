@@ -14,11 +14,23 @@ class NonResizableSplitter(QSplitter):
         super().__init__(orientation)
         self.setChildrenCollapsible(False)
     
+    def _isPositionOnHandle(self, pos):
+        """Check if a position is on any splitter handle"""
+        # Iterate through all handles and check if position is within handle geometry
+        for i in range(self.count() - 1):
+            handle = self.handle(i)
+            if handle:
+                # Convert position to handle's coordinate system
+                handle_pos = self.mapTo(handle, pos)
+                handle_rect = handle.rect()
+                if handle_rect.contains(handle_pos):
+                    return True
+        return False
+    
     def mousePressEvent(self, event):
         """Override to prevent mouse press on splitter handle"""
         # Check if click is on a handle
-        handle_index = self.handleAt(event.pos())
-        if handle_index >= 0:
+        if self._isPositionOnHandle(event.pos()):
             # Block the event completely
             event.ignore()
             return
@@ -33,8 +45,7 @@ class NonResizableSplitter(QSplitter):
     def mouseReleaseEvent(self, event):
         """Override to prevent mouse release after drag"""
         # Check if release is on a handle
-        handle_index = self.handleAt(event.pos())
-        if handle_index >= 0:
+        if self._isPositionOnHandle(event.pos()):
             event.ignore()
             return
         super().mouseReleaseEvent(event)

@@ -88,12 +88,16 @@ QTableWidget[sensorStatusTable="true"] QHeaderView::section {
 QTableWidget[sensorStatusTable="true"]::item {
     padding: 8px;
     border: none;
-    color: #333333;
     font-size: 11px;
 }
 
 QTableWidget[sensorStatusTable="true"]::item:alternate {
-    background-color: #f8f8f8;
+    background-color: transparent;
+}
+
+/* Remove any default background that might interfere with programmatic colors */
+QTableWidget[sensorStatusTable="true"]::item:selected {
+    background-color: transparent;
 }
 
 /* Tab Widget Styles */

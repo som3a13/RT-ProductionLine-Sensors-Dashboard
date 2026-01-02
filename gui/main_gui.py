@@ -527,6 +527,10 @@ class MainWindow(QMainWindow):
             plot_widget = pg.PlotWidget()
             plot_widget.setBackground('#ffffff')
             
+            # Disable auto-scale buttons (A icon) to prevent crashes
+            plot_item = plot_widget.getPlotItem()
+            plot_item.hideButtons()
+            
             # Set axis labels - smaller fonts for cleaner look
             if config.unit:
                 plot_widget.setLabel('left', config.unit, **{'color': '#333333', 'font-size': '9pt'})
@@ -802,6 +806,11 @@ class MainWindow(QMainWindow):
         
         self.sensor_trends_plot = pg.PlotWidget()
         self.sensor_trends_plot.setBackground('w')
+        
+        # Disable auto-scale buttons (A icon) to prevent crashes
+        plot_item = self.sensor_trends_plot.getPlotItem()
+        plot_item.hideButtons()
+        
         self.sensor_trends_plot.setLabel('left', 'Value')
         self.sensor_trends_plot.setLabel('bottom', 'Time')
         self.sensor_trends_plot.showGrid(x=True, y=True, alpha=0.3)
@@ -1574,15 +1583,12 @@ class MainWindow(QMainWindow):
                 status_details.append(f"{key}: {'[OK]' if status else '[FAIL]'}")
             
             if connected < total:
-                QMessageBox.warning(self, "Partial Connection",
-                                  f"Connected to {connected}/{total} channels:\n" + 
-                                  "\n".join(status_details))
+                # Don't show dialog - just log the information
+                pass
         else:
             self.statusBar().showMessage("Failed to connect to sensors")
             self.add_log_entry("Failed to connect to any sensor communication channels", "WARNING")
-            QMessageBox.warning(self, "Connection Error",
-                              "Could not connect to any sensor communication channels.\n"
-                              "Make sure the sensors are connected and available.")
+            # Don't show dialog - just log the information
         
         # Update global health indicator to reflect connection status
         self.update_global_health_indicator()
@@ -1855,30 +1861,55 @@ class MainWindow(QMainWindow):
             # Update sensor status table
             if hasattr(self, 'sensor_status_table'):
                 if reading:
-                    # Determine row background color based on status
+                    # Determine row background color based on status - using bright, vibrant colors
                     if reading.status == SensorStatus.OK:
-                        # Green - Healthy
-                        row_bg_color = QColor('#c8e6c9')
-                        row_text_color = QColor('#2e7d32')
+                        # Bright Green - Healthy
+                        row_bg_color = QColor(144, 238, 144)  # Light green background (bright)
+                        row_text_color = QColor(0, 100, 0)  # Dark green text for contrast
                     elif reading.status == SensorStatus.FAULTY:
-                        # Red - Critical
-                        row_bg_color = QColor('#c62828')
-                        row_text_color = QColor('#ffffff')
+                        # Bright Red - Faulty/Critical
+                        row_bg_color = QColor(255, 99, 71)  # Bright red/coral background
+                        row_text_color = QColor(139, 0, 0)  # Dark red text for contrast
                         has_alarm = True
-                    elif reading.status in [SensorStatus.LOW_ALARM, SensorStatus.HIGH_ALARM]:
-                        # Yellow - Warning
-                        row_bg_color = QColor('#fff9c4')
-                        row_text_color = QColor('#f57c00')
+                    elif reading.status == SensorStatus.HIGH_ALARM:
+                        # Bright Red - High Alarm
+                        row_bg_color = QColor(255, 99, 71)  # Bright red/coral background
+                        row_text_color = QColor(139, 0, 0)  # Dark red text for contrast
+                        has_alarm = True
+                    elif reading.status == SensorStatus.LOW_ALARM:
+                        # Bright Yellow - Low Alarm
+                        row_bg_color = QColor(255, 255, 0)  # Bright yellow background
+                        row_text_color = QColor(184, 134, 11)  # Dark goldenrod text for contrast
                         has_alarm = True
                     else:
                         # Default
                         row_bg_color = QColor('#ffffff')
                         row_text_color = QColor('#333333')
                     
+                    # Apply colors to all cells in the row - use setData to ensure colors are applied
+                    for col in range(self.sensor_status_table.columnCount()):
+                        item = self.sensor_status_table.item(row, col)
+                        if item is None:
+                            # Create item if it doesn't exist
+                            item = QTableWidgetItem("")
+                            self.sensor_status_table.setItem(row, col, item)
+                        
+                        # Set background and text colors using both methods for maximum compatibility
+                        item.setBackground(row_bg_color)
+                        item.setForeground(row_text_color)
+                        # Also set via setData to ensure it overrides stylesheet
+                        item.setData(Qt.BackgroundRole, row_bg_color)
+                        item.setData(Qt.ForegroundRole, row_text_color)
+                    
                     # Update latest value (column 2) - value only, no unit
                     value_item = QTableWidgetItem(f"{reading.value:.2f}")
+                    # Make value text larger for better visibility
+                    value_font = QFont("Segoe UI", 12)
+                    value_item.setFont(value_font)
                     value_item.setForeground(row_text_color)
                     value_item.setBackground(row_bg_color)
+                    value_item.setData(Qt.BackgroundRole, row_bg_color)
+                    value_item.setData(Qt.ForegroundRole, row_text_color)
                     self.sensor_status_table.setItem(row, 2, value_item)
                     
                     # Update unit column (column 3) - apply row color
@@ -1886,30 +1917,77 @@ class MainWindow(QMainWindow):
                     if unit_item:
                         unit_item.setForeground(row_text_color)
                         unit_item.setBackground(row_bg_color)
+                        unit_item.setData(Qt.BackgroundRole, row_bg_color)
+                        unit_item.setData(Qt.ForegroundRole, row_text_color)
+                    else:
+                        unit_item = QTableWidgetItem(reading.unit if reading.unit else "--")
+                        unit_item.setForeground(row_text_color)
+                        unit_item.setBackground(row_bg_color)
+                        unit_item.setData(Qt.BackgroundRole, row_bg_color)
+                        unit_item.setData(Qt.ForegroundRole, row_text_color)
+                        self.sensor_status_table.setItem(row, 3, unit_item)
                     
                     # Update timestamp (column 4)
                     time_str = reading.timestamp.strftime("%H:%M:%S")
                     time_item = QTableWidgetItem(time_str)
                     time_item.setForeground(row_text_color)
                     time_item.setBackground(row_bg_color)
+                    time_item.setData(Qt.BackgroundRole, row_bg_color)
+                    time_item.setData(Qt.ForegroundRole, row_text_color)
                     self.sensor_status_table.setItem(row, 4, time_item)
                     
-                    # Update status (column 5)
+                    # Update status (column 5) with enhanced colors
                     status_item = QTableWidgetItem(reading.status.value)
-                    status_item.setForeground(row_text_color)
                     status_item.setBackground(row_bg_color)
+                    status_item.setData(Qt.BackgroundRole, row_bg_color)
+                    
+                    # Make status text more prominent with bold font and vibrant colors
+                    status_font = QFont("Segoe UI", 10, QFont.Bold)
+                    status_item.setFont(status_font)
+                    
+                    # Set status-specific text colors for better visibility (bright and bold)
+                    if reading.status == SensorStatus.OK:
+                        status_text_color = QColor(0, 128, 0)  # Bright green
+                    elif reading.status == SensorStatus.FAULTY:
+                        status_text_color = QColor(220, 20, 60)  # Bright red/crimson
+                    elif reading.status == SensorStatus.HIGH_ALARM:
+                        status_text_color = QColor(220, 20, 60)  # Bright red/crimson
+                    elif reading.status == SensorStatus.LOW_ALARM:
+                        status_text_color = QColor(255, 140, 0)  # Bright orange/dark orange
+                    else:
+                        status_text_color = row_text_color
+                    
+                    status_item.setForeground(status_text_color)
+                    status_item.setData(Qt.ForegroundRole, status_text_color)
                     self.sensor_status_table.setItem(row, 5, status_item)
                     
-                    # Apply row colors to ID and Sensor Name columns as well
+                    # Ensure ID and Sensor Name columns have colors
                     id_item = self.sensor_status_table.item(row, 0)
                     if id_item:
                         id_item.setBackground(row_bg_color)
                         id_item.setForeground(row_text_color)
+                        id_item.setData(Qt.BackgroundRole, row_bg_color)
+                        id_item.setData(Qt.ForegroundRole, row_text_color)
                     
                     name_item = self.sensor_status_table.item(row, 1)
                     if name_item:
                         name_item.setBackground(row_bg_color)
                         name_item.setForeground(row_text_color)
+                        name_item.setData(Qt.BackgroundRole, row_bg_color)
+                        name_item.setData(Qt.ForegroundRole, row_text_color)
+                    
+                    # Force table update - reapply colors to all items to ensure they stick
+                    for col in range(self.sensor_status_table.columnCount()):
+                        item = self.sensor_status_table.item(row, col)
+                        if item:
+                            # Use setData first, then setBackground/setForeground
+                            item.setData(Qt.BackgroundRole, row_bg_color)
+                            item.setData(Qt.ForegroundRole, row_text_color)
+                            item.setBackground(row_bg_color)
+                            item.setForeground(row_text_color)
+                    
+                    # Force repaint to show colors immediately
+                    self.sensor_status_table.viewport().update()
                 else:
                     # No data yet - default colors
                     for col in [2, 4, 5]:  # Latest Value, Timestamp, Status
