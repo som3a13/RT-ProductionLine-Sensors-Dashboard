@@ -7,7 +7,6 @@ import sys
 import json
 import math
 import os
-import resource
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Dict, List
