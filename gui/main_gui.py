@@ -1735,6 +1735,9 @@ class MainWindow(QMainWindow):
             self.sensor_history[reading.sensor_id].append(reading.value)
             # Store actual timestamp for rolling window filtering
             self.sensor_timestamps[reading.sensor_id].append(reading.timestamp)
+        
+        # Update GUI table immediately for this sensor (don't wait for timer)
+        self._update_sensor_table_row(reading.sensor_id)
     
     def on_alarm_triggered(self, alarm: AlarmEvent):
         """Handle alarm event - send webhook and desktop notifications for all alarms (no limits)"""
@@ -1841,6 +1844,147 @@ class MainWindow(QMainWindow):
         
         # Add to live log viewer
         self.add_log_entry(f"{alarm.alarm_type} alarm on {alarm.sensor_name} (ID: {alarm.sensor_id}): Value = {alarm.value:.2f} {alarm.unit}", "ALARM")
+    
+    def _update_sensor_table_row(self, sensor_id: int):
+        """Update a single sensor row in the status table immediately"""
+        if not hasattr(self, 'sensor_status_table'):
+            return
+        
+        # Find the row index for this sensor
+        sorted_sensor_ids = sorted(self.sensor_configs.keys())
+        if sensor_id not in sorted_sensor_ids:
+            return
+        
+        row = sorted_sensor_ids.index(sensor_id)
+        reading = self.sensor_readings.get(sensor_id)
+        
+        if not reading:
+            return
+        
+        # Determine row background color based on status - using bright, vibrant colors
+        if reading.status == SensorStatus.OK:
+            # Bright Green - Healthy
+            row_bg_color = QColor(144, 238, 144)  # Light green background (bright)
+            row_text_color = QColor(0, 100, 0)  # Dark green text for contrast
+        elif reading.status == SensorStatus.FAULTY:
+            # Bright Red - Faulty/Critical
+            row_bg_color = QColor(255, 99, 71)  # Bright red/coral background
+            row_text_color = QColor(139, 0, 0)  # Dark red text for contrast
+        elif reading.status == SensorStatus.HIGH_ALARM:
+            # Bright Red - High Alarm
+            row_bg_color = QColor(255, 99, 71)  # Bright red/coral background
+            row_text_color = QColor(139, 0, 0)  # Dark red text for contrast
+        elif reading.status == SensorStatus.LOW_ALARM:
+            # Bright Yellow - Low Alarm
+            row_bg_color = QColor(255, 255, 0)  # Bright yellow background
+            row_text_color = QColor(184, 134, 11)  # Dark goldenrod text for contrast
+        else:
+            # Default
+            row_bg_color = QColor('#ffffff')
+            row_text_color = QColor('#333333')
+        
+        # Apply colors to all cells in the row - use setData to ensure colors are applied
+        for col in range(self.sensor_status_table.columnCount()):
+            item = self.sensor_status_table.item(row, col)
+            if item is None:
+                # Create item if it doesn't exist
+                item = QTableWidgetItem("")
+                self.sensor_status_table.setItem(row, col, item)
+            
+            # Set background and text colors using both methods for maximum compatibility
+            item.setBackground(row_bg_color)
+            item.setForeground(row_text_color)
+            # Also set via setData to ensure it overrides stylesheet
+            item.setData(Qt.BackgroundRole, row_bg_color)
+            item.setData(Qt.ForegroundRole, row_text_color)
+        
+        # Update latest value (column 2) - value only, no unit
+        value_item = QTableWidgetItem(f"{reading.value:.2f}")
+        # Make value text larger for better visibility
+        value_font = QFont("Segoe UI", 12)
+        value_item.setFont(value_font)
+        value_item.setForeground(row_text_color)
+        value_item.setBackground(row_bg_color)
+        value_item.setData(Qt.BackgroundRole, row_bg_color)
+        value_item.setData(Qt.ForegroundRole, row_text_color)
+        self.sensor_status_table.setItem(row, 2, value_item)
+        
+        # Update unit column (column 3) - apply row color
+        unit_item = self.sensor_status_table.item(row, 3)
+        if unit_item:
+            unit_item.setForeground(row_text_color)
+            unit_item.setBackground(row_bg_color)
+            unit_item.setData(Qt.BackgroundRole, row_bg_color)
+            unit_item.setData(Qt.ForegroundRole, row_text_color)
+        else:
+            unit_item = QTableWidgetItem(reading.unit if reading.unit else "--")
+            unit_item.setForeground(row_text_color)
+            unit_item.setBackground(row_bg_color)
+            unit_item.setData(Qt.BackgroundRole, row_bg_color)
+            unit_item.setData(Qt.ForegroundRole, row_text_color)
+            self.sensor_status_table.setItem(row, 3, unit_item)
+        
+        # Update timestamp (column 4)
+        time_str = reading.timestamp.strftime("%H:%M:%S")
+        time_item = QTableWidgetItem(time_str)
+        time_item.setForeground(row_text_color)
+        time_item.setBackground(row_bg_color)
+        time_item.setData(Qt.BackgroundRole, row_bg_color)
+        time_item.setData(Qt.ForegroundRole, row_text_color)
+        self.sensor_status_table.setItem(row, 4, time_item)
+        
+        # Update status (column 5) with enhanced colors
+        status_item = QTableWidgetItem(reading.status.value)
+        status_item.setBackground(row_bg_color)
+        status_item.setData(Qt.BackgroundRole, row_bg_color)
+        
+        # Make status text more prominent with bold font and vibrant colors
+        status_font = QFont("Segoe UI", 10, QFont.Bold)
+        status_item.setFont(status_font)
+        
+        # Set status-specific text colors for better visibility (bright and bold)
+        if reading.status == SensorStatus.OK:
+            status_text_color = QColor(0, 128, 0)  # Bright green
+        elif reading.status == SensorStatus.FAULTY:
+            status_text_color = QColor(220, 20, 60)  # Bright red/crimson
+        elif reading.status == SensorStatus.HIGH_ALARM:
+            status_text_color = QColor(220, 20, 60)  # Bright red/crimson
+        elif reading.status == SensorStatus.LOW_ALARM:
+            status_text_color = QColor(255, 140, 0)  # Bright orange/dark orange
+        else:
+            status_text_color = row_text_color
+        
+        status_item.setForeground(status_text_color)
+        status_item.setData(Qt.ForegroundRole, status_text_color)
+        self.sensor_status_table.setItem(row, 5, status_item)
+        
+        # Ensure ID and Sensor Name columns have colors
+        id_item = self.sensor_status_table.item(row, 0)
+        if id_item:
+            id_item.setBackground(row_bg_color)
+            id_item.setForeground(row_text_color)
+            id_item.setData(Qt.BackgroundRole, row_bg_color)
+            id_item.setData(Qt.ForegroundRole, row_text_color)
+        
+        name_item = self.sensor_status_table.item(row, 1)
+        if name_item:
+            name_item.setBackground(row_bg_color)
+            name_item.setForeground(row_text_color)
+            name_item.setData(Qt.BackgroundRole, row_bg_color)
+            name_item.setData(Qt.ForegroundRole, row_text_color)
+        
+        # Force table update - reapply colors to all items to ensure they stick
+        for col in range(self.sensor_status_table.columnCount()):
+            item = self.sensor_status_table.item(row, col)
+            if item:
+                # Use setData first, then setBackground/setForeground
+                item.setData(Qt.BackgroundRole, row_bg_color)
+                item.setData(Qt.ForegroundRole, row_text_color)
+                item.setBackground(row_bg_color)
+                item.setForeground(row_text_color)
+        
+        # Force repaint to show colors immediately
+        self.sensor_status_table.viewport().update()
     
     def update_display(self):
         """Update the display with latest sensor data"""
@@ -2289,7 +2433,11 @@ class MainWindow(QMainWindow):
                     # Give the server a moment to initialize
                     import time
                     time.sleep(0.5)
+                    # Run the server (this will run forever until interrupted)
                     self.console_loop.run_until_complete(self.remote_console.start())
+                except (KeyboardInterrupt, SystemExit):
+                    # Normal shutdown
+                    pass
                 except Exception as e:
                     print(f"Remote console error: {e}")
                     import traceback
@@ -2297,10 +2445,37 @@ class MainWindow(QMainWindow):
                     self.console_started = False
                 finally:
                     self.console_started = False
-                    # Clean up event loop
+                    # Clean up event loop gracefully
                     try:
-                        self.console_loop.close()
-                    except:
+                        if self.console_loop and not self.console_loop.is_closed():
+                            # Cancel all remaining tasks
+                            try:
+                                pending = asyncio.all_tasks(self.console_loop)
+                                for task in pending:
+                                    if not task.done():
+                                        task.cancel()
+                                
+                                # Wait for tasks to complete cancellation (only if loop is not running)
+                                if pending and not self.console_loop.is_running():
+                                    try:
+                                        self.console_loop.run_until_complete(
+                                            asyncio.gather(*pending, return_exceptions=True)
+                                        )
+                                    except (RuntimeError, asyncio.CancelledError):
+                                        pass
+                            except RuntimeError:
+                                # Loop is closed, ignore
+                                pass
+                            
+                            # Close the loop if it's not already closed
+                            try:
+                                if not self.console_loop.is_closed():
+                                    self.console_loop.close()
+                            except RuntimeError:
+                                # Already closed, ignore
+                                pass
+                    except Exception:
+                        # Ignore all errors during cleanup
                         pass
             
             self.console_thread = threading.Thread(target=run_console, daemon=True)
@@ -2505,9 +2680,10 @@ class MainWindow(QMainWindow):
         # Stop remote console
         if self.remote_console and hasattr(self, 'console_loop') and self.console_loop:
             try:
-                # Stop the event loop gracefully
-                self.console_loop.call_soon_threadsafe(self.console_loop.stop)
-            except:
+                # Stop the event loop
+                if self.console_loop.is_running():
+                    self.console_loop.call_soon_threadsafe(self.console_loop.stop)
+            except Exception:
                 pass
         event.accept()
     
