@@ -16,15 +16,24 @@ Notification Methods (in order of preference):
    - Windows: win10toast (if available)
    - Linux: notify-send (if available)
 3. Console fallback - Prints to console if all methods fail
+
+Webhook Implementation:
+- Webhooks are sent in background threads to prevent GUI freezing
+- Works on both Windows and Linux without blocking the main thread
 """
 import json
 import platform
 import requests
+import threading
+import warnings
 from typing import Dict, Optional
 from core.sensor_data import AlarmEvent
 from PyQt5.QtWidgets import QSystemTrayIcon, QApplication
 from PyQt5.QtGui import QIcon
 from PyQt5.QtCore import QObject, pyqtSignal
+
+# Suppress win10toast deprecation warning (it's a library issue, not our code)
+warnings.filterwarnings('ignore', category=UserWarning, module='win10toast')
 
 
 class NotificationManager(QObject):
@@ -42,46 +51,89 @@ class NotificationManager(QObject):
         self.is_windows = platform.system() == "Windows"
         self.is_linux = platform.system() == "Linux"
         
+        # Thread lock for thread-safe webhook sending
+        self._webhook_lock = threading.Lock()
+        
         # Desktop notifications - works on Linux and Windows
         self.tray_icon = None
         self.use_system_notify = False
         self.win10toast_available = False
         self.toaster = None
+        self.icon_path = None
         
-        # Try PyQt5 system tray first (works on both Linux and Windows)
+        # Try to find fav.png icon for tray icon
+        try:
+            from pathlib import Path
+            # Try to find fav.png in project root
+            script_dir = Path(__file__).parent
+            project_root = script_dir.parent
+            icon_path = project_root / 'fav.png'
+            if icon_path.exists():
+                self.icon_path = str(icon_path)
+        except Exception:
+            pass
+        
+        # Platform-specific fallback initialization (do this first for Windows)
+        if self.is_windows:
+            # Windows: Try win10toast as primary method (more reliable on Windows)
+            try:
+                # Suppress deprecation warning when importing win10toast
+                with warnings.catch_warnings():
+                    warnings.filterwarnings('ignore', category=UserWarning, module='win10toast')
+                    from win10toast import ToastNotifier
+                
+                self.toaster = ToastNotifier()
+                self.win10toast_available = True
+                print("Windows toast notifications (win10toast) initialized")
+            except ImportError:
+                print("Warning: win10toast not available. Install with: pip install win10toast")
+                self.win10toast_available = False
+            except Exception as e:
+                print(f"Warning: win10toast initialization error: {e}")
+                self.win10toast_available = False
+        elif self.is_linux:
+            # Linux: Check for notify-send command
+            import shutil
+            if shutil.which("notify-send"):
+                self.use_system_notify = True
+                print("Using Linux notify-send for desktop notifications")
+        
+        # Try PyQt5 system tray as secondary method (works on both Linux and Windows)
         # Note: Requires QApplication to be running
         try:
             from PyQt5.QtWidgets import QApplication
+            from PyQt5.QtGui import QIcon
             app = QApplication.instance()
             if app is not None and QSystemTrayIcon.isSystemTrayAvailable():
                 try:
                     self.tray_icon = QSystemTrayIcon()
-                    # Set a default icon if available
-                    self.tray_icon.show()
+                    # Priority 1: Use fav.png if available
+                    if self.icon_path:
+                        try:
+                            icon = QIcon(self.icon_path)
+                            if not icon.isNull():
+                                self.tray_icon.setIcon(icon)
+                                self.tray_icon.show()
+                                print("PyQt5 system tray icon initialized with fav.png")
+                        except Exception as e:
+                            print(f"Error loading fav.png for tray icon: {e}")
+                    
+                    # Priority 2: Try app icon if fav.png failed
+                    if self.tray_icon.icon().isNull():
+                        app_icon = app.windowIcon()
+                        if not app_icon.isNull():
+                            self.tray_icon.setIcon(app_icon)
+                            self.tray_icon.show()
+                            print("PyQt5 system tray icon initialized with app icon")
+                        else:
+                            self.tray_icon = None  # Can't use without icon
+                            print("Warning: No icon available for system tray")
                 except Exception as e:
                     print(f"System tray initialization error: {e}")
+                    self.tray_icon = None
         except Exception as e:
             # QApplication not available yet, will use fallback
             pass
-        
-        # Platform-specific fallback initialization
-        if not self.tray_icon:
-            if self.is_windows:
-                # Windows: Try win10toast
-                try:
-                    from win10toast import ToastNotifier
-                    self.toaster = ToastNotifier()
-                    self.win10toast_available = True
-                    print("Using Windows toast notifications (win10toast) for desktop notifications")
-                except ImportError:
-                    print("Warning: win10toast not available. Install with: pip install win10toast")
-                    self.win10toast_available = False
-            elif self.is_linux:
-                # Linux: Check for notify-send command
-                import shutil
-                if shutil.which("notify-send"):
-                    self.use_system_notify = True
-                    print("Using Linux notify-send for desktop notifications")
     
     def send_notification(self, alarm: AlarmEvent):
         """Send all enabled notifications for an alarm"""
@@ -111,7 +163,7 @@ class NotificationManager(QObject):
                 f"Time: {alarm.timestamp.strftime('%Y-%m-%d %H:%M:%S')}")
     
     def send_webhook(self, alarm: AlarmEvent) -> bool:
-        """Send webhook POST notification"""
+        """Send webhook POST notification (blocking - use send_webhook_async for non-blocking)"""
         try:
             payload = {
                 "event_type": "alarm",
@@ -133,34 +185,37 @@ class NotificationManager(QObject):
             print(f"Webhook notification error: {e}")
             return False
     
+    def send_webhook_async(self, alarm: AlarmEvent):
+        """Send webhook POST notification in a background thread (non-blocking)
+        
+        This method prevents GUI freezing by running the network request
+        in a separate daemon thread. Use this instead of send_webhook()
+        when called from the GUI thread.
+        """
+        if not self.webhook_url:
+            return
+        
+        def _send_in_thread():
+            """Internal function to send webhook in background thread"""
+            try:
+                with self._webhook_lock:  # Thread-safe
+                    success = self.send_webhook(alarm)
+                    if success:
+                        print(f"Webhook sent successfully for alarm: {alarm.sensor_name}")
+                    else:
+                        print(f"Webhook failed for alarm: {alarm.sensor_name}")
+            except Exception as e:
+                print(f"Error in webhook thread: {e}")
+        
+        # Start webhook in background thread (daemon thread won't block app shutdown)
+        thread = threading.Thread(target=_send_in_thread, daemon=True)
+        thread.start()
+    
     def send_desktop_notification(self, alarm: AlarmEvent, message: str):
         """Send desktop notification - works on Linux Ubuntu and Windows"""
         try:
-            # Method 1: PyQt5 System Tray (works on both Linux and Windows)
-            # Try to get/create tray icon if not already available
-            if not self.tray_icon:
-                try:
-                    from PyQt5.QtWidgets import QApplication
-                    app = QApplication.instance()
-                    if app is not None and QSystemTrayIcon.isSystemTrayAvailable():
-                        self.tray_icon = QSystemTrayIcon()
-                        self.tray_icon.show()
-                except Exception:
-                    pass
-            
-            if self.tray_icon:
-                self.tray_icon.showMessage(
-                    f"ALARM: {alarm.sensor_name}",
-                    f"{alarm.alarm_type} Alarm - Value: {alarm.value:.2f} {alarm.unit}\n"
-                    f"Time: {alarm.timestamp.strftime('%H:%M:%S')}",
-                    QSystemTrayIcon.Critical,
-                    5000  # 5 seconds
-                )
-                return
-            
-            # Method 2: Platform-specific fallbacks
+            # On Windows, prefer win10toast (more reliable)
             if self.is_windows:
-                # Windows: Use win10toast (if available)
                 if self.win10toast_available and self.toaster:
                     try:
                         self.toaster.show_toast(
@@ -172,6 +227,73 @@ class NotificationManager(QObject):
                         return
                     except Exception as e:
                         print(f"Windows toast notification error: {e}")
+                        # Fall through to PyQt5 tray icon
+            
+            # Method 1: PyQt5 System Tray (works on both Linux and Windows)
+            # Try to get/create tray icon if not already available
+            if not self.tray_icon:
+                try:
+                    from PyQt5.QtWidgets import QApplication
+                    from PyQt5.QtGui import QIcon
+                    app = QApplication.instance()
+                    if app is not None and QSystemTrayIcon.isSystemTrayAvailable():
+                        self.tray_icon = QSystemTrayIcon()
+                        # Priority 1: Use fav.png if available
+                        if self.icon_path:
+                            try:
+                                icon = QIcon(self.icon_path)
+                                if not icon.isNull():
+                                    self.tray_icon.setIcon(icon)
+                            except Exception:
+                                pass
+                        # Priority 2: Try app icon if fav.png failed
+                        if self.tray_icon.icon().isNull():
+                            app_icon = app.windowIcon()
+                            if not app_icon.isNull():
+                                self.tray_icon.setIcon(app_icon)
+                        # Only show if icon is set
+                        if not self.tray_icon.icon().isNull():
+                            self.tray_icon.show()
+                except Exception as e:
+                    print(f"Error creating tray icon: {e}")
+            
+            if self.tray_icon and not self.tray_icon.icon().isNull():
+                try:
+                    # Use QTimer to ensure showMessage is called from main thread
+                    # This prevents WNDPROC errors on Windows
+                    from PyQt5.QtCore import QTimer
+                    def show_notification():
+                        try:
+                            if self.tray_icon and not self.tray_icon.icon().isNull():
+                                self.tray_icon.showMessage(
+                                    f"ALARM: {alarm.sensor_name}",
+                                    f"{alarm.alarm_type} Alarm - Value: {alarm.value:.2f} {alarm.unit}\n"
+                                    f"Time: {alarm.timestamp.strftime('%H:%M:%S')}",
+                                    QSystemTrayIcon.Critical,
+                                    5000  # 5 seconds
+                                )
+                        except Exception as e:
+                            print(f"Tray icon notification error: {e}")
+                    # Schedule in main thread (thread-safe)
+                    QTimer.singleShot(0, show_notification)
+                    return
+                except Exception as e:
+                    print(f"Tray icon notification error: {e}")
+            
+            # Method 2: Platform-specific fallbacks (if PyQt5 failed)
+            if self.is_windows:
+                # Windows: Try win10toast again if PyQt5 failed
+                if self.win10toast_available and self.toaster:
+                    try:
+                        self.toaster.show_toast(
+                            f"ALARM: {alarm.sensor_name}",
+                            f"{alarm.alarm_type} Alarm - Value: {alarm.value:.2f} {alarm.unit}",
+                            duration=5,
+                            threaded=True
+                        )
+                        return
+                    except Exception as e:
+                        print(f"Windows toast notification error (fallback): {e}")
             
             elif self.is_linux:
                 # Linux: Use notify-send (if available)

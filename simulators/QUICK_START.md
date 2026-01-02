@@ -1,4 +1,4 @@
-*For Linux :*
+*For Linux : (check scripts too for headless mode)*  
 
 
 *python3 ./simulators/sensor_serial.py --config "temperature:1:115200:8N1" --config "pressure:2:115200:8N1"*
@@ -12,7 +12,7 @@
 *python3 main.py*
 
 
-For windows
+For windows : (check scripts too for headless mode)
 
 *python3 ./simulators/sensor_serial.py --config "temperature:1:115200:8N1" --com-port COM20 --config "pressure:2:115200:8N1" --com-port COM22*
 

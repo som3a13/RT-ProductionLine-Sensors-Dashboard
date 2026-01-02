@@ -146,16 +146,35 @@ def parse_tcp_sensor_spec(spec: str) -> dict:
     }
 
 
-def start_serial_simulator(configs: List[str]) -> Dict[int, str]:
-    """Start serial simulator and capture PTY paths"""
+def start_serial_simulator(configs: List[str], com_ports: Optional[List[str]] = None) -> Dict[int, str]:
+    """Start serial simulator and capture PTY paths (Linux) or COM ports (Windows)
+    
+    Args:
+        configs: List of serial sensor config strings
+        com_ports: Optional list of COM ports for Windows (must match order of configs)
+    """
     print("\n" + "="*60)
     print("Starting Serial Sensor Simulator...")
     print("="*60)
     
     # Build command
     cmd = [sys.executable, "-u", str(SIMULATORS_DIR / "sensor_serial.py")]  # -u for unbuffered output
-    for config_str in configs:
-        cmd.extend(["--config", config_str])
+    
+    # On Windows, add COM ports if provided
+    if sys.platform == 'win32' and com_ports:
+        if len(com_ports) != len(configs):
+            print(f"Warning: Number of COM ports ({len(com_ports)}) doesn't match number of serial configs ({len(configs)})")
+            print("COM ports will be ignored. Please ensure --com-port matches each --serial argument.")
+        else:
+            # Interleave configs and COM ports
+            for i, config_str in enumerate(configs):
+                cmd.extend(["--config", config_str])
+                if i < len(com_ports):
+                    cmd.extend(["--com-port", com_ports[i]])
+    else:
+        # Linux or no COM ports specified
+        for config_str in configs:
+            cmd.extend(["--config", config_str])
     
     # Start process and capture output
     proc = subprocess.Popen(
@@ -173,15 +192,16 @@ def start_serial_simulator(configs: List[str]) -> Dict[int, str]:
     pty_paths = {}
     configs_parsed = [parse_serial_config(c) for c in configs]
     
-    # Wait for PTY creation (max 10 seconds, but read limited lines)
+    # Wait for PTY/COM port creation (max 10 seconds, but read limited lines)
     start_time = time.time()
     output_buffer = ""
     recent_lines = []  # Keep last 10 lines for pattern matching
     lines_read = 0
     max_lines = 50  # Read max 50 lines to avoid hanging
+    timeout_seconds = 5  # Reduced timeout for Windows
     
     # Read output line by line with timeout
-    while time.time() - start_time < 10 and lines_read < max_lines:
+    while time.time() - start_time < timeout_seconds and lines_read < max_lines:
         # Use select to check if data is available (non-blocking)
         if sys.platform != 'win32':
             # Unix: use select
@@ -192,14 +212,21 @@ def start_serial_simulator(configs: List[str]) -> Dict[int, str]:
                 time.sleep(0.1)
                 continue
         else:
-            # Windows: just try to read
+            # Windows: check if process is still running and use timeout
             if proc.poll() is not None:
                 break
+            # On Windows, readline can block, so check if we already have enough information
+            if len(pty_paths) >= len(configs):
+                # We have all the ports we need, break early
+                break
         
-        # Try to read a line
+        # Try to read a line (may block on Windows, but we have timeout and early exit checks)
         line = proc.stdout.readline()
         if not line:
             if proc.poll() is not None:
+                break
+            # On Windows, if no line and process still running, check if we have enough info
+            if sys.platform == 'win32' and len(pty_paths) >= len(configs):
                 break
             time.sleep(0.1)
             continue
@@ -216,8 +243,8 @@ def start_serial_simulator(configs: List[str]) -> Dict[int, str]:
         # Look for pattern: Device: X followed by Sensor ID: Y (or vice versa) in recent lines
         recent_text = ''.join(recent_lines)
         
-        # Pattern 1: Device comes before Sensor ID
-        pattern1 = r'Device:\s+(/dev/pts/\d+|COM\d+).*?Sensor ID:\s+(\d+)'
+        # Pattern 1: Device/Port comes before Sensor ID
+        pattern1 = r'(?:Device|Port):\s+(/dev/pts/\d+|COM\d+).*?Sensor ID:\s+(\d+)'
         matches1 = re.finditer(pattern1, recent_text, re.DOTALL)
         for match in matches1:
             device = match.group(1)
@@ -225,8 +252,8 @@ def start_serial_simulator(configs: List[str]) -> Dict[int, str]:
             if sensor_id not in pty_paths:
                 pty_paths[sensor_id] = device
         
-        # Pattern 2: Sensor ID comes before Device
-        pattern2 = r'Sensor ID:\s+(\d+).*?Device:\s+(/dev/pts/\d+|COM\d+)'
+        # Pattern 2: Sensor ID comes before Device/Port
+        pattern2 = r'Sensor ID:\s+(\d+).*?(?:Device|Port):\s+(/dev/pts/\d+|COM\d+)'
         matches2 = re.finditer(pattern2, recent_text, re.DOTALL)
         for match in matches2:
             sensor_id = int(match.group(1))
@@ -446,16 +473,35 @@ def start_main_application():
 
 
 def update_config_with_serial_paths(config: dict, pty_paths: Dict[int, str]):
-    """Update config.json with serial PTY paths"""
+    """Update config.json with serial PTY paths (Linux) or COM ports (Windows)
+    
+    On Windows, virtual COM ports come in pairs (e.g., COM20-COM21, COM22-COM23).
+    The simulator uses one end (COM20), and the application should connect to the other end (COM21).
+    """
     updated = False
     for sensor in config.get('sensors', []):
         if sensor.get('protocol') == 'serial' and sensor.get('id') in pty_paths:
             old_port = sensor['protocol_config'].get('port')
-            new_port = pty_paths[sensor['id']]
+            simulator_port = pty_paths[sensor['id']]
+            
+            # On Windows, increment COM port number by 1 (virtual COM ports come in pairs)
+            if sys.platform == 'win32' and simulator_port.startswith('COM'):
+                try:
+                    # Extract COM port number (e.g., "COM20" -> 20)
+                    port_num = int(simulator_port[3:])
+                    # Increment by 1 for the paired port (COM20 -> COM21)
+                    new_port = f"COM{port_num + 1}"
+                except (ValueError, IndexError):
+                    # If parsing fails, use simulator port as-is
+                    new_port = simulator_port
+            else:
+                # Linux: use PTY path directly
+                new_port = simulator_port
+            
             if old_port != new_port:
                 sensor['protocol_config']['port'] = new_port
                 updated = True
-                print(f"  Updated sensor {sensor['id']} ({sensor['name']}): {old_port} -> {new_port}")
+                print(f"  Updated sensor {sensor['id']} ({sensor['name']}): {old_port} -> {new_port} (simulator uses {simulator_port})")
     
     return updated
 
@@ -524,6 +570,8 @@ Examples:
     
     parser.add_argument('--serial', action='append', dest='serial_configs',
                        help='Serial sensor config: TYPE:ID:BAUDRATE:PARAMS (e.g., temperature:1:115200:8N1)')
+    parser.add_argument('--com-port', action='append', dest='com_ports',
+                       help='COM port for Windows serial sensors (e.g., COM20). Must match order of --serial arguments.')
     parser.add_argument('--modbus', action='append', dest='modbus_configs',
                        help='Modbus sensor config: TYPE:ID:HOST:PORT:UNIT_ID:REGISTER')
     parser.add_argument('--tcp-server-ports', nargs='+', type=int,
@@ -552,8 +600,9 @@ Examples:
     # Start serial simulators
     pty_paths = {}
     if args.serial_configs:
-        pty_paths = start_serial_simulator(args.serial_configs)
-        time.sleep(3)  # Give time for PTY creation and output
+        com_ports = getattr(args, 'com_ports', None)
+        pty_paths = start_serial_simulator(args.serial_configs, com_ports)
+        time.sleep(3)  # Give time for PTY/COM port creation and output
     
     # Start Modbus simulators
     modbus_procs = []

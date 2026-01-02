@@ -1,4 +1,4 @@
-# Production Line Remote Maintenance Console - Project Documentation
+# Real-Time Production Line Sensor Dashboard with Remote Access & Notifications  Project Documentation
 
 ## Table of Contents
 
@@ -37,18 +37,23 @@ The **Production Line Remote Maintenance Console** is a comprehensive real-time 
 - **Remote Console**: Web-based remote access via WebSocket with authentication
 - **Global System Health**: Overall system health indicator (Normal/Warning/Critical)
 - **Color-Coded Status**: Visual status indicators (Green: OK, Yellow: Alarm, Red: Faulty)
-- **Notification System**: Webhook and Desktop notifications (state transition only)
+- **Notification System**: Webhook (non-blocking, async) and Desktop notifications (Windows/Linux)
 - **Thread-Safe Architecture**: Worker threads for non-blocking I/O
+- **Cross-Platform Support**: Full Windows and Linux compatibility with platform-specific optimizations
+- **Headless Startup**: Automated system startup scripts for both platforms
 - **Modular Design**: Clean separation of concerns
-- **Application Icon**: Custom icon and favicon for professional branding
+- **Application Icon**: Custom icon and favicon for professional branding (taskbar, window, notifications, web)
 
 ### Supported Protocols
 
-1. **Serial Communication (PTY)**: Supports multiple sensors using pseudo-terminals
+1. **Serial Communication**: Supports multiple sensors using pseudo-terminals (Linux) or COM ports (Windows)
 
+   - **Linux**: Uses PTY (pseudo-terminals) - `/dev/pts/X` devices
+   - **Windows**: Uses COM ports - real or virtual COM port pairs (e.g., COM20-COM21)
    - Configurable baudrate (default: 115200)
    - 8N1 configuration (8 data bits, No parity, 1 stop bit)
    - JSON frame format
+   - **Virtual COM Port Pairs (Windows)**: When using com0com, simulator uses one port (COM20) and application connects to paired port (COM21) - automatically handled by startup script
    - **Worker Thread Model**: One worker thread per unique serial port
      - Multiple sensors on the same port share one worker thread
      - Example: 3 sensors on 3 different ports = 3 worker threads
@@ -97,6 +102,12 @@ _Data flow sequence showing how sensor data moves through the system from simula
 
 _System startup flowchart showing the phased initialization process from user launch through component setup, server startup, to system running state._
 
+#### Webhook Background Thread Flowchart
+
+![Webhook Background Thread](WEBHOOK_BACKGROUND_THREAD.png)
+
+_Webhook background thread implementation flowchart showing how webhooks are sent asynchronously in a separate thread to prevent GUI freezing. The diagram illustrates the separation between the main GUI thread and the background thread, thread-safe locking mechanism, and the non-blocking nature of webhook notifications. Key benefits: GUI never freezes, thread-safe implementation, works on both Windows and Linux._
+
 ### Text-Based Architecture Overview
 
 ```
@@ -137,7 +148,7 @@ _System startup flowchart showing the phased initialization process from user la
 
 ┌─────────────────────────────────────────────────────────────┐
 │              Alarm Notification System                       │
-│              (Webhook, Desktop Notifications)                │
+│              (Webhook [Async], Desktop Notifications)        │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -216,15 +227,29 @@ This script checks:
 
 ### Step 3: Start Sensor Simulators
 
-The system requires sensor simulators to be running. Start them in separate terminals:
+The system requires sensor simulators to be running. You have several options:
 
-**Option 1: Start All Sensors (Recommended)**
+**Option 1: Headless System Startup (Recommended - Easiest)**
+
+This automatically starts all simulators, updates config.json, and launches the main application:
+
+**Linux:**
+```bash
+./scripts/start_system_linux.sh
+```
+
+**Windows:**
+```cmd
+scripts\start_system_windows.bat
+```
+
+**Option 2: Start All Sensors Manually**
 
 ```bash
 ./scripts/run_all_sensors.sh
 ```
 
-**Option 2: Start Individual Sensors**
+**Option 3: Start Individual Sensors**
 
 ````bash
 # Example: Starting multiple serial sensors
@@ -1161,8 +1186,12 @@ Alarms are automatically detected when:
    - **Low limit** (at time of alarm)
    - **High limit** (at time of alarm)
    - Unit
-3. **Notification**: `NotificationManager` sends notifications for all alarms (no limits or filtering)
-4. **Logging**: Alarm is added to alarm log (GUI and Remote Console)
+3. **Signal Emission**: `SensorManager` emits `alarm_triggered` PyQt signal (thread-safe)
+4. **GUI Handler**: `MainWindow.on_alarm_triggered()` receives signal in GUI thread
+5. **Notification**: `NotificationManager` sends notifications for all alarms (no limits or filtering)
+   - **Webhook**: Sent asynchronously in background thread (non-blocking)
+   - **Desktop**: Sent via platform-specific notification system
+6. **Logging**: Alarm is added to alarm log (GUI and Remote Console)
 
 ### Notification Behavior
 
@@ -1193,10 +1222,12 @@ The system sends notifications for all alarms without any filtering or limits:
 
 #### Webhook Notifications
 
-- **Method**: HTTP POST request
+- **Method**: HTTP POST request (non-blocking, runs in background thread)
 - **Format**: JSON payload
 - **URL**: Configurable in `config.json`
 - **Unlimited**: All alarms trigger webhook notifications immediately - no filtering
+- **Thread-Safe**: Webhooks are sent asynchronously to prevent GUI freezing (especially on Windows)
+- **Platform Support**: Works on both Linux and Windows without blocking the main thread
 - **Payload:**
   ```json
   {
@@ -1211,6 +1242,124 @@ The system sends notifications for all alarms without any filtering or limits:
     "high_limit": 80.0
   }
   ```
+
+#### Webhook Integration with GUI (Non-Blocking Architecture)
+
+The webhook notification system is designed to work seamlessly with the PyQt5 GUI without causing any freezing or blocking. Here's how it works:
+
+**Flow Overview:**
+
+1. **Alarm Detection** → Sensor Manager detects an alarm condition
+2. **Signal Emission** → Sensor Manager emits `alarm_triggered` PyQt signal
+3. **GUI Handler** → `MainWindow.on_alarm_triggered()` receives the signal in the GUI thread
+4. **Async Webhook Call** → GUI calls `notification_manager.send_webhook_async(alarm)`
+5. **Background Thread** → Webhook HTTP request runs in a separate daemon thread
+6. **GUI Continues** → GUI thread immediately continues without waiting
+
+**Detailed Implementation:**
+
+**Step 1: Alarm Triggered in GUI Thread**
+
+When an alarm is detected, the `SensorManager` emits a PyQt signal:
+
+```python
+# In SensorManager (worker thread)
+self.alarm_triggered.emit(alarm_event)  # Thread-safe signal emission
+```
+
+**Step 2: GUI Receives Signal**
+
+The `MainWindow.on_alarm_triggered()` method is called in the GUI thread:
+
+```python
+def on_alarm_triggered(self, alarm: AlarmEvent):
+    """Handle alarm event - send webhook and desktop notifications"""
+    # This runs in the GUI thread (main thread)
+    
+    # Send webhook for ALL alarms - non-blocking
+    if self.notification_manager.webhook_url:
+        self.notification_manager.send_webhook_async(alarm)  # Non-blocking call
+    
+    # Send desktop notification (also non-blocking via QTimer)
+    message = self.notification_manager._format_alarm_message(alarm)
+    self.notification_manager.send_desktop_notification(alarm, message)
+```
+
+**Step 3: Background Thread Creation**
+
+The `send_webhook_async()` method creates a background daemon thread:
+
+```python
+def send_webhook_async(self, alarm: AlarmEvent):
+    """Send webhook POST notification in a background thread (non-blocking)
+    
+    This method prevents GUI freezing by running the network request
+    in a separate daemon thread. Use this instead of send_webhook()
+    when called from the GUI thread.
+    """
+    if not self.webhook_url:
+        return
+    
+    def _send_in_thread():
+        """Internal function to send webhook in background thread"""
+        try:
+            with self._webhook_lock:  # Thread-safe lock
+                success = self.send_webhook(alarm)  # Blocking HTTP POST
+                if success:
+                    print(f"Webhook sent successfully for alarm: {alarm.sensor_name}")
+                else:
+                    print(f"Webhook failed for alarm: {alarm.sensor_name}")
+        except Exception as e:
+            print(f"Error in webhook thread: {e}")
+    
+    # Start webhook in background thread (daemon thread won't block app shutdown)
+    thread = threading.Thread(target=_send_in_thread, daemon=True)
+    thread.start()  # Returns immediately, GUI continues
+```
+
+**Key Features:**
+
+1. **Non-Blocking**: The GUI thread never waits for the HTTP request to complete
+2. **Thread-Safe**: Uses `threading.Lock` (`_webhook_lock`) to prevent race conditions
+3. **Daemon Thread**: Background thread is marked as daemon, so it won't prevent application shutdown
+4. **Error Handling**: Exceptions in the background thread are caught and logged
+5. **Immediate Return**: `thread.start()` returns immediately, allowing GUI to continue
+
+**Thread Safety:**
+
+- **Lock Mechanism**: The `_webhook_lock` ensures only one webhook request executes at a time
+- **No Shared State**: Each webhook request is independent, no shared mutable state
+- **Exception Isolation**: Errors in background thread don't affect GUI thread
+
+**Benefits:**
+
+- **GUI Never Freezes**: Main thread is never blocked by network I/O
+- **Responsive UI**: User can interact with GUI while webhooks are being sent
+- **Cross-Platform**: Works identically on Windows and Linux
+- **Scalable**: Multiple alarms can trigger webhooks without queuing delays
+- **Reliable**: Thread-safe implementation prevents race conditions
+
+**Visual Flow:**
+
+See the [Webhook Background Thread Flowchart](WEBHOOK_BACKGROUND_THREAD.png) for a detailed visual representation of this architecture.
+
+**Comparison: Blocking vs Non-Blocking**
+
+**Blocking Approach (Old - Causes GUI Freeze):**
+```python
+# BAD: Blocks GUI thread
+def on_alarm_triggered(self, alarm):
+    response = requests.post(webhook_url, json=payload)  # GUI freezes here!
+    # GUI is frozen until HTTP request completes (could be seconds)
+```
+
+**Non-Blocking Approach (Current - No GUI Freeze):**
+```python
+# GOOD: Returns immediately, runs in background
+def on_alarm_triggered(self, alarm):
+    self.notification_manager.send_webhook_async(alarm)  # Returns immediately
+    # GUI continues immediately, HTTP request happens in background
+```
 
 ### Testing Webhooks
 
@@ -1474,27 +1623,47 @@ python3 scripts/read_modbus_frame.py
    pip install -r requirements.txt
    ```
 
-2. **Start Simulators**
+2. **Start System (Headless - Recommended)**
 
+   This automatically starts all simulators, updates config.json, and launches the application:
+
+   **Linux:**
+   ```bash
+   ./scripts/start_system_linux.sh
+   ```
+
+   **Windows:**
+   ```cmd
+   scripts\start_system_windows.bat
+   ```
+
+   **What it does:**
+   - Starts all sensor simulators (Serial, TCP, Modbus)
+   - Automatically updates `config.json` with detected ports
+   - On Windows: Handles COM port pairs (simulator COM20 → config COM21)
+   - Starts webhook server (optional)
+   - Launches main GUI application
+
+3. **Manual Start (Alternative)**
+
+   If you prefer to start components manually:
+
+   **Start Simulators:**
    ```bash
    ./scripts/run_all_sensors.sh
    ```
 
-   This starts all simulators configured in `config.json`. The number of simulators depends on your configuration.
+   **Update Ports** (for Serial sensors):
+   - **Linux**: Note PTY paths from simulator output (e.g., `/dev/pts/7`, `/dev/pts/9`)
+   - **Windows**: Note COM ports. If using virtual COM port pairs, simulator uses COM20, application needs COM21
+   - Update `config/config.json` with the actual ports
 
-3. **Update PTY Paths** (for Serial sensors)
-
-   - Note PTY paths from simulator output (e.g., `/dev/pts/7`, `/dev/pts/9`)
-   - Update `config/config.json` with the actual PTY paths
-   - **Note**: Each serial sensor simulator creates its own PTY device
-
-4. **Start Application**
-
+   **Start Application:**
    ```bash
    python3 main.py
    ```
 
-5. **Access Remote Console** (optional)
+4. **Access Remote Console** (optional)
    - Open: `http://localhost:8080/remote_console_client.html`
    - Login with: `admin` / `admin123`
 
@@ -1766,13 +1935,35 @@ PYTHONPATH=. python3 main.py
 - Verify simulators are running
 - Check connection status in System Tools → Get Snapshot
 
-#### 5. "PTY device not found"
+#### 5. "PTY device not found" (Linux) or "COM port not found" (Windows)
 
-**Solution:**
-
+**Solution (Linux):**
 - Restart the simulator
 - Update `config.json` with the new PTY path
 - Restart the main application
+
+**Solution (Windows):**
+- Ensure COM port is specified with `--com-port COM20` when running simulator
+- For virtual COM ports: Install com0com and create port pairs
+- If using virtual COM port pairs: Simulator uses COM20, application needs COM21 (automatically handled by `start_system_windows.bat`)
+- Update `config.json` with the correct COM port
+- Restart the main application
+
+#### 6. Windows: GUI freezes or hangs at startup
+
+**Solution:**
+- This has been fixed with asyncio event loop policy and non-blocking webhooks
+- Ensure you're using the latest version of the code
+- Webhooks now run in background threads and won't block the GUI
+- If issues persist, disable webhooks in `config.json` by setting `"webhook_url": ""`
+
+#### 7. Windows: Icon not appearing in taskbar
+
+**Solution:**
+- Icon handling has been improved with multiple sizes and absolute paths
+- Try restarting the application
+- Clear Windows icon cache if needed
+- Ensure `fav.png` exists in the project root directory
 
 ### Debug Mode
 
@@ -1856,6 +2047,11 @@ This comprehensive documentation covers all aspects of the Si-Ware Production Li
 - Web-based remote console
 - Comprehensive alarm system
 - Modular, extensible design
+- **Cross-platform**: Full Windows and Linux support with platform-specific optimizations
+- **Headless startup**: Automated scripts (`start_system_linux.sh` / `start_system_windows.bat`) for easy deployment
+- **Non-blocking operations**: Webhooks and notifications run in background threads (prevents GUI freezing)
+- **Professional icons**: Custom icons for taskbar, window, notifications, and web favicon
+- **Windows optimizations**: Asyncio event loop policy, COM port pair handling, thread-safe notifications
 
 **System Requirements:**
 
@@ -1877,18 +2073,18 @@ _Last Updated: January 2025_
 
 ### Version Updates (January 2025)
 
-- ✅ **Real-Time Rolling Plots**: Per-sensor plots with 15-second rolling window and fixed y-axis based on sensor limits
-- ✅ **Global System Health Indicator**: Overall system health display (Normal/Warning/Critical) beside Connect button
-- ✅ **Color-Coded Sensor Status**: Visual status indicators with row-level color coding (Green: OK, Yellow: Alarm, Red: Faulty)
-- ✅ **Maintenance Console Tab**: Password-protected tab with authentication from `config.json`
-- ✅ **Alarm Log with Limits**: Alarm log now includes low_limit and high_limit at time of alarm
-- ✅ **Live Log Viewer**: Real-time system logs including login/logout, alarm clearing, sensor connections, and diagnostics
-- ✅ **Unlimited Notifications**: All alarms trigger webhook and desktop notifications immediately - no filtering or limits
-- ✅ **Dashboard Alarm Table**: Quick view of last 10 alarms directly on dashboard
-- ✅ **Application Icon**: Custom icon (`fav.png`) for both desktop application and web interface
-- ✅ **Light Theme**: Modern, clean light theme interface
-- ✅ **Resizable Window**: Main window can be resized for different screen sizes
-- ✅ **Scrollable Components**: Sensor table and plots section are scrollable for variable number of sensors
-- ✅ **Multiple Sensor Simulator Support**: Can run multiple serial sensor simulators concurrently
-- ✅ **Web Interface Updates**: Alarm log and live log viewer side-by-side, includes low/high limits
-- ✅ **Enhanced Logging**: Comprehensive system logging with color-coded levels
+- **Real-Time Rolling Plots**: Per-sensor plots with 15-second rolling window and fixed y-axis based on sensor limits
+- **Global System Health Indicator**: Overall system health display (Normal/Warning/Critical) beside Connect button
+- **Color-Coded Sensor Status**: Visual status indicators with row-level color coding (Green: OK, Yellow: Alarm, Red: Faulty)
+- **Maintenance Console Tab**: Password-protected tab with authentication from `config.json`
+- **Alarm Log with Limits**: Alarm log now includes low_limit and high_limit at time of alarm
+- **Live Log Viewer**: Real-time system logs including login/logout, alarm clearing, sensor connections, and diagnostics
+- **Unlimited Notifications**: All alarms trigger webhook and desktop notifications immediately - no filtering or limits
+- **Dashboard Alarm Table**: Quick view of last 10 alarms directly on dashboard
+- **Application Icon**: Custom icon (`fav.png`) for both desktop application and web interface
+- **Light Theme**: Modern, clean light theme interface
+- **Resizable Window**: Main window can be resized for different screen sizes
+- **Scrollable Components**: Sensor table and plots section are scrollable for variable number of sensors
+- **Multiple Sensor Simulator Support**: Can run multiple serial sensor simulators concurrently
+- **Web Interface Updates**: Alarm log and live log viewer side-by-side, includes low/high limits
+- **Enhanced Logging**: Comprehensive system logging with color-coded levels

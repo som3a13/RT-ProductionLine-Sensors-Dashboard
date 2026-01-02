@@ -8,7 +8,7 @@
       "unit": "\u00b0C",
       "protocol": "serial",
       "protocol_config": {
-        "port": "/dev/pts/8",
+        "port": "COM21",
         "baudrate": 115200,
         "bytesize": 8,
         "parity": "N",
@@ -23,7 +23,7 @@
       "unit": "PSI",
       "protocol": "serial",
       "protocol_config": {
-        "port": "/dev/pts/9",
+        "port": "COM23",
         "baudrate": 115200,
         "bytesize": 8,
         "parity": "N",

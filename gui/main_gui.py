@@ -154,10 +154,8 @@ class MainWindow(QMainWindow):
         self.console_started = False
         self.http_server = None
         self.http_thread = None
-        self.start_remote_console()
-        self.start_http_server()
         
-        # Setup UI
+        # Setup UI first (non-blocking)
         self.setup_ui()
         
         # Setup update timer
@@ -166,11 +164,9 @@ class MainWindow(QMainWindow):
         self.update_timer.timeout.connect(self.update_display)
         self.update_timer.start(int(update_rate * 1000))  # Convert to milliseconds
         
-        # Connect to sensors
-        self.connect_to_sensors()
-        
-        # Update remote console with initial sensor data after a short delay
-        QTimer.singleShot(1000, self.update_remote_console_initial)
+        # Defer blocking operations until after window is shown
+        # This prevents freezing on Windows during initialization
+        QTimer.singleShot(100, self._deferred_initialization)
         
         # System status
         self.system_status = "OK"
@@ -193,8 +189,14 @@ class MainWindow(QMainWindow):
         # Block mouse events on splitter handles
         if isinstance(obj, QWidget) and obj.parent() and isinstance(obj.parent(), QSplitter):
             if event.type() in [QEvent.MouseButtonPress, QEvent.MouseMove, QEvent.MouseButtonRelease, QEvent.HoverEnter, QEvent.HoverMove]:
-                return True  # Block the event
-        return super().eventFilter(obj, event)
+                event.accept()  # Accept the event to prevent further processing
+                return True  # Block the event - return True to indicate event was handled
+        # Call parent's eventFilter - ensure it always returns a boolean
+        try:
+            result = super().eventFilter(obj, event)
+            return bool(result)  # Ensure we always return a boolean
+        except Exception:
+            return False  # Return False if parent's eventFilter fails
     
     def apply_stylesheet(self):
         """Load and apply stylesheet from file"""
@@ -210,17 +212,30 @@ class MainWindow(QMainWindow):
             print(f"Error loading stylesheet: {e}")
     
     def set_application_icon(self):
-        """Set application icon from fav.png"""
+        """Set application icon from fav.png for window title bar and taskbar (Windows/Linux)"""
         # Get project root directory
         script_dir = Path(__file__).parent
         project_root = script_dir.parent
         icon_path = project_root / 'fav.png'
         
         if icon_path.exists():
-            icon = QIcon(str(icon_path))
-            self.setWindowIcon(icon)
-            # Also set for the application
-            QApplication.setWindowIcon(icon)
+            # Use absolute path for better Windows compatibility
+            abs_icon_path = str(icon_path.resolve())
+            icon = QIcon(abs_icon_path)
+            
+            # Verify icon is valid
+            if not icon.isNull():
+                # Set window icon (appears in window title bar)
+                self.setWindowIcon(icon)
+                # Set application-wide icon (appears in taskbar on Windows/Linux)
+                QApplication.setWindowIcon(icon)
+                # Also set on QApplication instance (Windows sometimes needs this)
+                app = QApplication.instance()
+                if app:
+                    app.setWindowIcon(icon)
+                print(f"Window icon set from: {abs_icon_path}")
+            else:
+                print(f"Warning: Icon file exists but could not be loaded: {abs_icon_path}")
         else:
             print(f"Warning: Icon file not found at {icon_path}, using default icon")
     
@@ -1631,10 +1646,17 @@ class MainWindow(QMainWindow):
             self.remote_console.set_sensor_readings(self.sensor_readings)
             # Broadcast update via WebSocket
             try:
-                asyncio.run_coroutine_threadsafe(
-                    self.remote_console.broadcast_sensor_update(reading),
-                    self.console_loop
-                )
+                # Check if event loop is running before scheduling coroutine
+                if self.console_loop.is_running():
+                    asyncio.run_coroutine_threadsafe(
+                        self.remote_console.broadcast_sensor_update(reading),
+                        self.console_loop
+                    )
+                # If loop is not running yet, the update will be sent when loop starts
+            except RuntimeError as e:
+                # Event loop might be closed or not ready yet
+                if "Event loop is closed" not in str(e):
+                    print(f"Error broadcasting sensor update: {e}")
             except Exception as e:
                 print(f"Error broadcasting sensor update: {e}")
         
@@ -1656,9 +1678,9 @@ class MainWindow(QMainWindow):
                         alarm_type="FAULT",
                         unit=reading.unit
                     )
-                    # Send webhook for ALL fault alarms (no limits)
+                    # Send webhook for ALL fault alarms (no limits) - non-blocking
                     if self.notification_manager.webhook_url:
-                        self.notification_manager.send_webhook(fault_alarm)
+                        self.notification_manager.send_webhook_async(fault_alarm)
                     # Send desktop notification
                     message = self.notification_manager._format_alarm_message(fault_alarm)
                     self.notification_manager.send_desktop_notification(fault_alarm, message)
@@ -1721,9 +1743,9 @@ class MainWindow(QMainWindow):
         else:
             current_status = SensorStatus.OK
         
-        # Send webhook for ALL alarms (no limits)
+        # Send webhook for ALL alarms (no limits) - non-blocking
         if self.notification_manager.webhook_url:
-            self.notification_manager.send_webhook(alarm)
+            self.notification_manager.send_webhook_async(alarm)
         
         # Send desktop notification for ALL alarms (no limits)
         message = self.notification_manager._format_alarm_message(alarm)
@@ -1744,10 +1766,17 @@ class MainWindow(QMainWindow):
             self.remote_console.add_alarm(alarm)
             # Broadcast alarm via WebSocket
             try:
-                asyncio.run_coroutine_threadsafe(
-                    self.remote_console.broadcast_alarm(alarm),
-                    self.console_loop
-                )
+                # Check if event loop is running before scheduling coroutine
+                if self.console_loop.is_running():
+                    asyncio.run_coroutine_threadsafe(
+                        self.remote_console.broadcast_alarm(alarm),
+                        self.console_loop
+                    )
+                # If loop is not running yet, the update will be sent when loop starts
+            except RuntimeError as e:
+                # Event loop might be closed or not ready yet
+                if "Event loop is closed" not in str(e):
+                    print(f"Error broadcasting alarm: {e}")
             except Exception as e:
                 print(f"Error broadcasting alarm: {e}")
         
@@ -2168,8 +2197,16 @@ class MainWindow(QMainWindow):
             self.remote_console = RemoteConsoleServer(host=host, port=port, users=users)
             
             def run_console():
-                self.console_loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(self.console_loop)
+                # Fix for Windows: Create event loop with proper policy
+                if sys.platform == 'win32':
+                    # On Windows, create a new event loop with the proper policy
+                    self.console_loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(self.console_loop)
+                else:
+                    # On Linux/Unix, use default event loop
+                    self.console_loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(self.console_loop)
+                
                 try:
                     # Give the server a moment to initialize
                     import time
@@ -2182,25 +2219,31 @@ class MainWindow(QMainWindow):
                     self.console_started = False
                 finally:
                     self.console_started = False
+                    # Clean up event loop
+                    try:
+                        self.console_loop.close()
+                    except:
+                        pass
             
             self.console_thread = threading.Thread(target=run_console, daemon=True)
             self.console_thread.start()
             
-            # Give thread a moment to start
-            import time
-            time.sleep(0.2)
+            # Initialize remote console with current sensor readings (non-blocking)
+            # Use QTimer to defer this check until after thread has time to start
+            def init_console_callback():
+                if self.remote_console:
+                    self.remote_console.set_sensor_readings(self.sensor_readings)
+                    # Set callback to clear alarms in main GUI from remote console
+                    self.remote_console.set_clear_alarms_callback(self.clear_alarm_log_from_remote)
+                    self.console_started = True
+                    http_port = console_config.get("http_port", 8080)
+                    print(f"[OK] Remote Console Server started successfully on ws://{host}:{port}")
+                    print(f"  Connect from web client at: http://localhost:{http_port}/web/remote_console_client.html")
+                else:
+                    print("✗ Failed to initialize Remote Console Server")
             
-            # Initialize remote console with current sensor readings
-            if self.remote_console:
-                self.remote_console.set_sensor_readings(self.sensor_readings)
-                # Set callback to clear alarms in main GUI from remote console
-                self.remote_console.set_clear_alarms_callback(self.clear_alarm_log_from_remote)
-                self.console_started = True
-                http_port = console_config.get("http_port", 8080)
-                print(f"[OK] Remote Console Server started successfully on ws://{host}:{port}")
-                print(f"  Connect from web client at: http://localhost:{http_port}/web/remote_console_client.html")
-            else:
-                print("✗ Failed to initialize Remote Console Server")
+            # Defer initialization check to avoid blocking (Windows fix)
+            QTimer.singleShot(500, init_console_callback)
         except Exception as e:
             print(f"Failed to start remote console: {e}")
             import traceback
@@ -2344,15 +2387,25 @@ class MainWindow(QMainWindow):
             self.http_thread = threading.Thread(target=run_http_server, daemon=True)
             self.http_thread.start()
             
-            # Give server a moment to start
-            import time
-            time.sleep(0.3)
+            # Server starts in background thread, no need to wait
             
         except Exception as e:
             print(f"Failed to start HTTP server: {e}")
             import traceback
             traceback.print_exc()
             self.http_server = None
+    
+    def _deferred_initialization(self):
+        """Deferred initialization to prevent blocking during window creation (Windows fix)"""
+        # Start remote console and HTTP server (non-blocking, in threads)
+        self.start_remote_console()
+        self.start_http_server()
+        
+        # Connect to sensors (may take time, but won't block window creation)
+        self.connect_to_sensors()
+        
+        # Update remote console with initial sensor data after a delay
+        QTimer.singleShot(1000, self.update_remote_console_initial)
     
     def update_remote_console_initial(self):
         """Update remote console with initial sensor data"""
@@ -2464,9 +2517,75 @@ class MainWindow(QMainWindow):
 
 def main():
     """Main entry point"""
+    # Fix for Windows: Set asyncio event loop policy before creating QApplication
+    # This prevents hangs on Windows when mixing asyncio with PyQt5
+    if sys.platform == 'win32':
+        # Use ProactorEventLoopPolicy on Windows for better compatibility
+        asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+    
     app = QApplication(sys.argv)
     
+    # Set application icon early (before creating window) for taskbar icon
+    # This ensures the icon appears in taskbar on both Windows and Linux
+    # On Windows, the icon must be set on QApplication before creating any windows
+    try:
+        script_dir = Path(__file__).parent
+        project_root = script_dir.parent
+        icon_path = project_root / 'fav.png'
+        if icon_path.exists():
+            # Use absolute path for better Windows compatibility
+            abs_icon_path = str(icon_path.resolve())
+            
+            # On Windows, try to create icon with proper sizes for better taskbar display
+            if sys.platform == 'win32':
+                try:
+                    # Load as pixmap first, then create icon with multiple sizes
+                    pixmap = QPixmap(abs_icon_path)
+                    if not pixmap.isNull():
+                        icon = QIcon()
+                        # Add multiple sizes for Windows (16x16, 32x32, 48x48, 256x256)
+                        sizes = [16, 32, 48, 256]
+                        for size in sizes:
+                            scaled = pixmap.scaled(size, size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                            icon.addPixmap(scaled)
+                        # Also add the original
+                        icon.addPixmap(pixmap)
+                    else:
+                        icon = QIcon(abs_icon_path)
+                except Exception:
+                    icon = QIcon(abs_icon_path)
+            else:
+                icon = QIcon(abs_icon_path)
+            
+            # Verify icon is valid
+            if not icon.isNull():
+                # Set on QApplication first (required for Windows taskbar)
+                QApplication.setWindowIcon(icon)
+                app.setWindowIcon(icon)
+                print(f"Application icon set from: {abs_icon_path}")
+            else:
+                print(f"Warning: Icon file exists but could not be loaded: {abs_icon_path}")
+        else:
+            print(f"Warning: Icon file not found at: {icon_path}")
+    except Exception as e:
+        print(f"Warning: Could not set application icon: {e}")
+        import traceback
+        traceback.print_exc()
+    
     window = MainWindow()
+    # Ensure window icon is also set (Windows sometimes needs both)
+    try:
+        script_dir = Path(__file__).parent
+        project_root = script_dir.parent
+        icon_path = project_root / 'fav.png'
+        if icon_path.exists():
+            abs_icon_path = str(icon_path.resolve())
+            icon = QIcon(abs_icon_path)
+            if not icon.isNull():
+                window.setWindowIcon(icon)
+    except Exception as e:
+        pass  # Already set in set_application_icon()
+    
     window.show()
     
     sys.exit(app.exec_())

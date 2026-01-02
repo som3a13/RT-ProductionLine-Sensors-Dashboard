@@ -142,14 +142,28 @@ Your `config/config.json` should have sensors configured like this (matching the
 
 ### Step 3: Start Sensor Simulators
 
-**Option A: Automated Headless Startup (Recommended for Linux)**
+**Option A: Automated Headless Startup (Recommended - Works on Both Linux and Windows)**
 
 Use the headless startup script that automatically starts all simulators and updates `config.json`:
 
+**Linux:**
 ```bash
+./scripts/start_system_linux.sh
+```
+
+**Windows:**
+```cmd
+scripts\start_system_windows.bat
+```
+
+**Or use the Python script directly (Cross-platform):**
+```bash
+# Linux
 python3 ./scripts/start_system.py \
     --serial "temperature:1:115200:8N1" \
+    --com-port COM20 \
     --serial "pressure:2:115200:8N1" \
+    --com-port COM22 \
     --modbus "voltage:5:localhost:1502:1:0" \
     --modbus "pressure:7:localhost:1502:2:0" \
     --tcp-server-ports 5000 5001 \
@@ -158,22 +172,37 @@ python3 ./scripts/start_system.py \
     --tcp-sensor "flow:6:localhost:5001" \
     --webhook \
     --main-app
+
+# Windows (adjust COM ports based on your available ports)
+python scripts\start_system.py ^
+    --serial "temperature:1:115200:8N1" ^
+    --com-port COM20 ^
+    --serial "pressure:2:115200:8N1" ^
+    --com-port COM22 ^
+    --modbus "voltage:5:localhost:1502:1:0" ^
+    --modbus "pressure:7:localhost:1502:2:0" ^
+    --tcp-server-ports 5000 5001 ^
+    --tcp-sensor "flow:3:localhost:5000" ^
+    --tcp-sensor "vibration:4:localhost:5000" ^
+    --tcp-sensor "flow:6:localhost:5001" ^
+    --webhook ^
+    --main-app
 ```
 
-Or use the quick start script:
-
-```bash
-./scripts/start_system_linux.sh
-```
-
-The script will:
+**What the headless startup scripts do:**
 
 - Start all simulators in the background
-- Automatically capture PTY paths from serial simulators
+- **Linux**: Automatically capture PTY paths from serial simulators
+- **Windows**: Automatically handle COM port pairs (simulator uses COM20, config gets COM21)
 - Update `config.json` with correct ports and paths
 - Start the webhook server (if `--webhook` is specified)
 - Start the main application (if `--main-app` is specified)
 - Handle Ctrl+C to stop all processes gracefully
+
+**Windows COM Port Notes:**
+- For virtual COM ports, install com0com first using `install_com0com_simple.bat`
+- Adjust COM port numbers (COM20, COM22) in the commands based on your available ports
+- The script automatically handles COM port pairing (simulator port → paired port in config)
 
 **Option B: Manual Startup (Separate Terminals)**
 
@@ -240,17 +269,28 @@ python3 main.py
 
 ### Quick Start Summary
 
-**Order of execution:**
+**Easiest Method (Headless Startup):**
 
-1. ✅ Install dependencies: `pip3 install -r requirements.txt`
+1. ✅ Install dependencies: `pip3 install -r requirements.txt` (Linux) or `pip install -r requirements.txt` (Windows)
+2. ✅ **Linux**: Run `./scripts/start_system_linux.sh`
+3. ✅ **Windows**: Run `scripts\start_system_windows.bat`
+4. ✅ The script handles everything automatically - simulators, config updates, and main app
+5. ✅ Click "Connect" button in GUI when it opens
+
+**Manual Method (Separate Terminals):**
+
+1. ✅ Install dependencies: `pip3 install -r requirements.txt` (Linux) or `pip install -r requirements.txt` (Windows)
 2. ✅ Configure `config/config.json` to match your simulators (sensor IDs, ports, protocols)
 3. ✅ Start Modbus sensors (Terminal 1)
 4. ✅ Start TCP sensors (Terminal 2)
 5. ✅ Start webhook server (Terminal 3, optional)
-6. ✅ Start main application: `python3 main.py` (Terminal 4)
+6. ✅ Start main application: `python3 main.py` (Linux) or `python main.py` (Windows) (Terminal 4)
 7. ✅ Click "Connect" button in GUI
 
-**All commands use `python3`** - Make sure Python 3.8+ is installed and accessible via `python3` command.
+**Note:** 
+- **Linux**: Use `python3` command
+- **Windows**: Use `python` command (or `python3` if available)
+- Make sure Python 3.8+ is installed
 
 ---
 
