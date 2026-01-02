@@ -26,6 +26,7 @@ import platform
 import requests
 import threading
 import warnings
+import time
 from typing import Dict, Optional
 from core.sensor_data import AlarmEvent
 from PyQt5.QtWidgets import QSystemTrayIcon, QApplication
@@ -47,12 +48,21 @@ class NotificationManager(QObject):
         self.desktop_enabled = self.config.get("enable_desktop_notifications", True)
         self.webhook_url = self.config.get("webhook_url", "")
         
+        # Rate limiting configuration (in seconds)
+        # Minimum time between notifications for the same sensor
+        self.webhook_min_interval = self.config.get("webhook_min_interval", 10.0)  # Default: 10 seconds
+        self.desktop_min_interval = self.config.get("desktop_min_interval", 5.0)  # Default: 5 seconds
+        
         # Detect platform
         self.is_windows = platform.system() == "Windows"
         self.is_linux = platform.system() == "Linux"
         
         # Thread lock for thread-safe webhook sending
         self._webhook_lock = threading.Lock()
+        
+        # Rate limiting tracking: {sensor_id: {last_webhook_time, last_desktop_time}}
+        self._last_notification_times = {}
+        self._rate_limit_lock = threading.Lock()
         
         # Desktop notifications - works on Linux and Windows
         self.tray_icon = None
@@ -185,14 +195,43 @@ class NotificationManager(QObject):
             print(f"Webhook notification error: {e}")
             return False
     
+    def _should_send_webhook(self, alarm: AlarmEvent) -> bool:
+        """Check if webhook should be sent based on rate limiting"""
+        if self.webhook_min_interval <= 0:
+            return True  # Rate limiting disabled
+        
+        with self._rate_limit_lock:
+            sensor_id = alarm.sensor_id
+            current_time = time.time()
+            
+            if sensor_id not in self._last_notification_times:
+                self._last_notification_times[sensor_id] = {}
+            
+            last_webhook_time = self._last_notification_times[sensor_id].get('webhook', 0)
+            time_since_last = current_time - last_webhook_time
+            
+            if time_since_last >= self.webhook_min_interval:
+                self._last_notification_times[sensor_id]['webhook'] = current_time
+                return True
+            else:
+                remaining = self.webhook_min_interval - time_since_last
+                print(f"Webhook rate limited for {alarm.sensor_name}: {remaining:.1f}s remaining")
+                return False
+    
     def send_webhook_async(self, alarm: AlarmEvent):
         """Send webhook POST notification in a background thread (non-blocking)
         
         This method prevents GUI freezing by running the network request
         in a separate daemon thread. Use this instead of send_webhook()
         when called from the GUI thread.
+        
+        Rate limiting is applied to prevent spam and server overload.
         """
         if not self.webhook_url:
+            return
+        
+        # Check rate limit before sending
+        if not self._should_send_webhook(alarm):
             return
         
         def _send_in_thread():
@@ -211,8 +250,38 @@ class NotificationManager(QObject):
         thread = threading.Thread(target=_send_in_thread, daemon=True)
         thread.start()
     
+    def _should_send_desktop(self, alarm: AlarmEvent) -> bool:
+        """Check if desktop notification should be sent based on rate limiting"""
+        if self.desktop_min_interval <= 0:
+            return True  # Rate limiting disabled
+        
+        with self._rate_limit_lock:
+            sensor_id = alarm.sensor_id
+            current_time = time.time()
+            
+            if sensor_id not in self._last_notification_times:
+                self._last_notification_times[sensor_id] = {}
+            
+            last_desktop_time = self._last_notification_times[sensor_id].get('desktop', 0)
+            time_since_last = current_time - last_desktop_time
+            
+            if time_since_last >= self.desktop_min_interval:
+                self._last_notification_times[sensor_id]['desktop'] = current_time
+                return True
+            else:
+                remaining = self.desktop_min_interval - time_since_last
+                print(f"Desktop notification rate limited for {alarm.sensor_name}: {remaining:.1f}s remaining")
+                return False
+    
     def send_desktop_notification(self, alarm: AlarmEvent, message: str):
-        """Send desktop notification - works on Linux Ubuntu and Windows"""
+        """Send desktop notification - works on Linux Ubuntu and Windows
+        
+        Rate limiting is applied to prevent notification spam.
+        """
+        # Check rate limit before sending
+        if not self._should_send_desktop(alarm):
+            return
+        
         try:
             # On Windows, prefer win10toast (more reliable)
             if self.is_windows:

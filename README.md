@@ -2,45 +2,19 @@
 
 A comprehensive real-time monitoring and maintenance system for industrial production lines. Monitor multiple sensors across different communication protocols, manage alarms, and access remote maintenance features through both desktop and web interfaces.
 
-## 🚀 Key Features
+## Key Features
 
-### Core Monitoring
+- **Real-Time Sensor Monitoring**: Live data from multiple sensors with 2+ Hz refresh rate
+- **Multi-Protocol Support**: Serial (PTY), TCP/IP, and Modbus/TCP communication
+- **Real-Time Rolling Plots**: Per-sensor plots showing last 15 seconds of data
+- **Color-Coded Status**: Visual status indicators (Green: OK, Yellow: Alarm, Red: Faulty)
+- **Global System Health**: Overall system health indicator
+- **Alarm Management**: Automatic detection with complete alarm history and notifications
+- **Maintenance Console**: Password-protected access with alarm log, system tools, and live logs
+- **Web-Based Remote Console**: Browser access with authentication
+- **Desktop & Webhook Notifications**: Platform-specific notifications and HTTP webhooks
 
-- ✅ **Real-Time Sensor Monitoring**: Live data from multiple sensors with 2+ Hz refresh rate
-- ✅ **Multi-Protocol Support**: Serial (PTY), TCP/IP, and Modbus/TCP communication
-- ✅ **Real-Time Rolling Plots**: Per-sensor plots showing last 15 seconds of data with fixed y-axis based on sensor limits
-- ✅ **Color-Coded Status**: Visual status indicators (Green: OK, Yellow: Low/High Alarm, Red: Faulty)
-- ✅ **Global System Health**: Overall system health indicator showing Normal/Warning/Critical status
-
-### Alarm Management
-
-- ✅ **Intelligent Alarm Detection**: Automatic detection of LOW/HIGH limits and faulty sensors (-999)
-- ✅ **Alarm Log with Limits**: Complete alarm history including low/high limits at time of alarm
-- ✅ **Unlimited Notifications**: All alarms trigger notifications (webhook and desktop) - no filtering or limits
-- ✅ **Dashboard Alarm Table**: Quick view of recent alarms directly on dashboard
-- ✅ **Multiple Notification Methods**: Desktop notifications (Linux/Windows) and webhook support
-
-### Maintenance Console
-
-- ✅ **Password-Protected Maintenance Tab**: Secure access with username/password authentication from `config.json`
-- ✅ **Comprehensive Alarm Log**: Full alarm history with timestamps, values, types, and limits
-- ✅ **System Tools**: Remote commands (self-test, snapshot, system diagnostics)
-- ✅ **Live Log Viewer**: Real-time system logs including:
-  - User login/logout events
-  - Alarm clearing events
-  - Sensor connection attempts
-  - System diagnostics
-- ✅ **Web-Based Remote Console**: Access from any browser with authentication
-
-### User Interface
-
-- ✅ **Modern Light Theme**: Clean, professional interface
-- ✅ **Resizable Window**: Flexible window sizing for different screen sizes
-- ✅ **Scrollable Components**: Sensor table and plots section are scrollable for variable number of sensors
-- ✅ **Custom Application Icon**: Professional branding with custom icon and favicon
-- ✅ **Responsive Layout**: Optimized layout with sensor table on left, plots on right
-
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 
@@ -271,21 +245,18 @@ python3 main.py
 
 **Easiest Method (Headless Startup):**
 
-1. ✅ Install dependencies: `pip3 install -r requirements.txt` (Linux) or `pip install -r requirements.txt` (Windows)
-2. ✅ **Linux**: Run `./scripts/start_system_linux.sh`
-3. ✅ **Windows**: Run `scripts\start_system_windows.bat`
-4. ✅ The script handles everything automatically - simulators, config updates, and main app
-5. ✅ Click "Connect" button in GUI when it opens
+1. Install dependencies: `pip3 install -r requirements.txt`
+2. **Linux**: Run `./scripts/start_system_linux.sh`
+3. **Windows**: Run `scripts\start_system_windows.bat`
+4. Click "Connect" button in GUI when it opens or it will auto connect
 
-**Manual Method (Separate Terminals):**
+**Manual Method:**
 
-1. ✅ Install dependencies: `pip3 install -r requirements.txt` (Linux) or `pip install -r requirements.txt` (Windows)
-2. ✅ Configure `config/config.json` to match your simulators (sensor IDs, ports, protocols)
-3. ✅ Start Modbus sensors (Terminal 1)
-4. ✅ Start TCP sensors (Terminal 2)
-5. ✅ Start webhook server (Terminal 3, optional)
-6. ✅ Start main application: `python3 main.py` (Linux) or `python main.py` (Windows) (Terminal 4)
-7. ✅ Click "Connect" button in GUI
+1. Install dependencies: `pip3 install -r requirements.txt`
+2. Configure `config/config.json` to match your simulators
+3. Start sensor simulators in separate terminals
+4. Start main application: `python3 main.py`
+5. Click "Connect" button in GUI
 
 **Note:** 
 - **Linux**: Use `python3` command
@@ -294,7 +265,7 @@ python3 main.py
 
 ---
 
-## 📋 Project Structure
+## Project Structure
 
 ```
 RT-ProductionLine-Sensors-Dashboard/
@@ -317,19 +288,22 @@ RT-ProductionLine-Sensors-Dashboard/
 │   ├── __init__.py
 │   ├── main_gui.py             # Main PyQt5 GUI window
 │   ├── components/              # Reusable GUI components
+│   │   ├── __init__.py
 │   │   ├── splitter.py         # Non-resizable splitter
 │   │   └── helpers.py          # Helper classes
 │   ├── stylesheet/             # Styling
 │   │   └── styles.qss          # Light theme stylesheet
 │   └── tabs/                    # Tab components (future modularization)
+│       └── __init__.py
 │
 ├── services/                    # Services
 │   ├── __init__.py
 │   ├── alarm_notifications.py  # Notification system
-│   └── remote_console.py       # WebSocket remote console
+│   └── remote_console.py         # WebSocket remote console
 │
 ├── simulators/                  # Sensor simulators
 │   ├── README.md               # Simulator documentation
+│   ├── QUICK_START.md          # Quick start guide
 │   ├── sensor_serial.py        # Unified serial sensor simulator (PTY)
 │   ├── start_tcp_system.py     # TCP sensor system launcher
 │   ├── run_tcp_sensor_clients.py # TCP sensor clients
@@ -353,32 +327,38 @@ RT-ProductionLine-Sensors-Dashboard/
 │   ├── read_modbus_frame.py    # Read Modbus frames
 │   ├── check_modbus_server.py  # Check Modbus server
 │   ├── check_tcp_servers.py    # Check TCP servers
-│   ├── serve_api_docs.py       # Serve API documentation
-│   ├── run_api_docs.sh         # Run API docs script
-│   ├── generate_flowchart.py   # Generate system flowchart
-│   └── convert_md_to_pdf.py    # Convert markdown to PDF
+│   ├── start_system.py         # Cross-platform system startup script
+│   ├── start_system_linux.sh   # Linux system startup script
+│   ├── start_system_windows.bat # Windows system startup script
+│   └── generate_flowchart.py   # Generate system flowchart
 │
 ├── tests/                       # Unit tests
 │   ├── __init__.py
 │   ├── README.md               # Test documentation
 │   ├── test_sensor_data.py     # Sensor data tests (32 tests)
-│   └── test_results.png        # Test execution screenshot
+│   └── test_results.png         # Test execution screenshot
 │
-├── api/                         # API documentation
-│   ├── API_DOCUMENTATION.md    # Detailed API documentation
-│   └── openapi.yaml            # OpenAPI 3.0 specification
+├── docs/                        # Documentation
+│   ├── Project_Documentation.md # Complete system documentation
+│   ├── SYSTEM_FLOWCHART.md      # System flowchart documentation
+│   ├── WINDOWS_COMPATIBILITY.md # Windows compatibility guide
+│   ├── SYSTEM_ARCHITECTURE.png  # System architecture diagram
+│   ├── DATA_FLOW.png            # Data flow diagram
+│   ├── STARTUP_SEQUENCE.png     # Startup sequence diagram
+│   ├── WEBHOOK_BACKGROUND_THREAD.png # Webhook thread flowchart
+│   └── Si-Ware_System_-_PE_Assesment_v3.pdf # Assessment document
+│
+├── com0com/                     # Windows COM port virtualization
+│   ├── com0com-3.0.0.0-i386-and-x64-signed.zip # com0com installer
+│   ├── install_com0com_simple.bat # Simple installation script
+│   └── install_com0com.ps1     # PowerShell installation script
 │
 ├── README.md                    # This file
-├── Project_Documentation.md     # Complete system documentation
-├── Project_Documentation.pdf    # PDF version
-├── SYSTEM_FLOWCHART.md          # System flowchart documentation
-├── SYSTEM_ARCHITECTURE.png      # System architecture diagram
-├── DATA_FLOW.png                # Data flow diagram
-├── STARTUP_SEQUENCE.png         # Startup sequence diagram
-└── Si-Ware_System_-_PE_Assesment_v3.pdf # Assessment document
+├── Project_Documentation.pdf    # PDF version of documentation
+└── SYSTEM_ARCHITECTURE.png      # System architecture diagram (root copy)
 ```
 
-## 🛠️ Detailed Setup Steps
+## Detailed Setup
 
 ### Prerequisites
 
@@ -435,9 +415,9 @@ Edit `config/config.json` to configure your sensors. **Important:** The sensor I
 
 See [Configuration](#-configuration) section for detailed examples.
 
-## 🚀 Running Instructions
+## Running Instructions
 
-> **💡 Quick Start Available:** For a faster setup with pre-configured commands, see the [Quick Start](#-quick-start) section above.
+For a faster setup, see the [Quick Start](#quick-start) section above.
 
 ### Step 1: Start Sensor Simulators
 
@@ -567,7 +547,7 @@ The GUI application will:
    - **Viewer**: `viewer` / `viewer123` (read-only)
 3. Access real-time sensor data, alarms, and system commands
 
-## ⚙️ Configuration
+## Configuration
 
 Edit `config/config.json` to configure:
 
@@ -626,91 +606,47 @@ Edit `config/config.json` to configure:
 }
 ```
 
-## 📊 Features Overview
+## Features Overview
 
-### Dashboard Features
+### Dashboard
 
-1. **Sensor Status Table** (Left Panel)
+- **Sensor Status Table**: Real-time readings with color-coded status (Green: OK, Yellow: Alarm, Red: Faulty)
+- **Real-Time Plots**: Per-sensor plots with 15-second rolling window
+- **Global System Health**: Overall status indicator (Normal/Warning/Critical)
+- **Alarm Table**: Quick view of last 10 alarms
 
-   - Real-time sensor readings
-   - Color-coded rows (Green: OK, Yellow: Alarm, Red: Faulty)
-   - Columns: ID, Sensor Name, Latest Value, Unit, Timestamp, Status
-   - Scrollable for variable number of sensors
+### Maintenance Console
 
-2. **Real-Time Plots** (Right Panel)
+- **Authentication**: Password-protected access from `config.json`
+- **Alarm Log**: Complete history with export to CSV
+- **System Tools**: Self-test and system snapshot
+- **Live Log Viewer**: Real-time system logs with color-coded levels
 
-   - Individual plot per sensor
-   - Rolling 15-second window
-   - Fixed y-axis based on sensor limits
-   - Scrollable for multiple sensors
+### Notifications
 
-3. **Global System Health Indicator**
+- All alarms trigger notifications immediately
+- Desktop notifications (Linux/Windows)
+- Webhook notifications (HTTP POST)
+- Alarm types: LOW, HIGH, FAULT
 
-   - Overall system status (Normal/Warning/Critical)
-   - Located beside Connect/Disconnect button
-   - Color-coded status display
-
-4. **Dashboard Alarm Table**
-   - Quick view of last 10 alarms
-   - Shows time, sensor name, value, alarm type, and limits
-
-### Maintenance Console Features
-
-1. **Authentication**
-
-   - Username/password from `config.json`
-   - Content hidden until authenticated
-   - Secure access to sensitive features
-
-2. **Alarm Log Tab**
-
-   - Complete alarm history
-   - Columns: Time, Sensor Name, Value, Alarm Type, Low Limit, High Limit, Unit
-   - Export to CSV functionality
-   - Clear log functionality
-
-3. **System Tools Tab**
-
-   - Run Self-Test: System diagnostics
-   - Get Snapshot: Detailed system state
-   - Results displayed in formatted text
-
-4. **Live Log Viewer Tab**
-   - Real-time system logs
-   - Color-coded log levels (INFO, WARNING, ERROR, ALARM, FAULT)
-   - Logs include:
-     - User login/logout events
-     - Alarm clearing events
-     - Sensor connection attempts
-     - System diagnostics
-   - No forced auto-scrolling (manual scroll control)
-
-### Notification System
-
-- **Unlimited Notifications**: All alarms trigger notifications immediately - no filtering or state transition checks
-- **Desktop Notifications**: Automatic on Linux (via `notify-send`) and Windows (via `win10toast`)
-- **Webhook Notifications**: HTTP POST to configurable URL - sends all alarms without limits
-- **Alarm Types**: LOW, HIGH, FAULT (for -999 values)
-
-## 🔧 Usage Guide
+## Usage Guide
 
 ### Daily Operations
 
-1. **Start Simulators**: Run sensor simulators in separate terminals
-2. **Start Application**: Launch `python3 main.py`
-3. **Connect Sensors**: Click "Connect" button in dashboard
-4. **Monitor Dashboard**: View real-time sensor data and plots
-5. **Check Alarms**: View dashboard alarm table or maintenance console alarm log
-6. **Access Maintenance**: Login to Maintenance Console tab for detailed logs and tools
+1. Start sensor simulators
+2. Launch application: `python3 main.py`
+3. Click "Connect" button in dashboard
+4. Monitor real-time sensor data and plots
+5. Check alarms in dashboard or maintenance console
 
 ### Remote Access
 
-1. **Open Web Interface**: Navigate to `http://localhost:8080/remote_console_client.html`
-2. **Login**: Use credentials from `config.json`
-3. **View Data**: Access real-time sensor data, alarms, and logs
-4. **Run Commands**: Execute system diagnostics and get snapshots
+1. Open web interface: `http://localhost:8080/remote_console_client.html`
+2. Login with credentials from `config.json`
+3. Access real-time sensor data, alarms, and logs
+4. Execute system diagnostics and snapshots
 
-## 📡 Protocol Descriptions
+## Protocol Descriptions
 
 ### Serial Communication
 
@@ -909,7 +845,7 @@ All protocols support:
 - Configurable alarm limits
 - Status indication (OK, LOW_ALARM, HIGH_ALARM, FAULTY)
 
-## 📚 API Documentation
+## API Documentation
 
 ### WebSocket API
 
@@ -1026,29 +962,15 @@ All responses are JSON messages with a `type` field indicating the response type
 
 ### Detailed API Documentation
 
-For complete API documentation, see:
+The complete API documentation is available in this README file and in `docs/Project_Documentation.md`. The API includes:
 
-- **`api/API_DOCUMENTATION.md`** - Detailed markdown API documentation with examples
-- **`api/openapi.yaml`** - OpenAPI 3.0 specification
-
-### Interactive API Documentation
-
-View interactive API documentation with Swagger UI:
-
-```bash
-python3 scripts/serve_api_docs.py
-```
-
-Then open: `http://localhost:8081/`
-
-This provides:
-
-- Visual API explorer
-- Test endpoints directly from browser
+- WebSocket API for remote console access
+- Authentication and command reference
 - Request/response examples
-- Schema definitions
+- SensorManager API methods
+- SensorConfig API methods
 
-## 🧪 Testing
+## Testing
 
 ```bash
 # Run unit tests
@@ -1064,7 +986,7 @@ python3 scripts/test_desktop_notifications.py
 python3 scripts/test_websocket.py
 ```
 
-## 🏗️ Architecture
+## Architecture
 
 - **Modular Design**: Organized into logical packages
 - **OOP**: Object-oriented design throughout
@@ -1072,13 +994,35 @@ python3 scripts/test_websocket.py
 - **Separation of Concerns**: GUI, communication, services separated
 - **Port-Based Workers**: One worker thread per unique communication endpoint (not per sensor)
 
-## 🔐 Security
+### System Diagrams
+
+The following diagrams provide visual representations of the system architecture, data flow, and startup sequence:
+
+#### System Architecture
+
+![System Architecture](docs/SYSTEM_ARCHITECTURE.png)
+
+_Complete system architecture showing all components organized into logical layers: Sensor Simulators, Communication Layer, Management Layer, GUI Application, Remote Console, and Notification System._
+
+#### Data Flow
+
+![Data Flow](docs/DATA_FLOW.png)
+
+_Data flow sequence showing how sensor data moves through the system from simulators to GUI and remote console, with numbered processing steps._
+
+#### Startup Sequence
+
+![Startup Sequence](docs/STARTUP_SEQUENCE.png)
+
+_System startup flowchart showing the phased initialization process from user launch through component setup, server startup, to system running state._
+
+## Security
 
 - **Password Protection**: Maintenance console requires authentication
 - **User Permissions**: Role-based access control (read, write, commands)
 - **Secure WebSocket**: Authentication required for all remote console commands
 
-## 🎨 User Interface
+## User Interface
 
 - **Light Theme**: Modern, clean interface
 - **Resizable Window**: Flexible sizing
@@ -1086,21 +1030,21 @@ python3 scripts/test_websocket.py
 - **Color-Coded Status**: Intuitive visual feedback
 - **Scrollable Components**: Support for variable number of sensors
 
-## 📝 Recent Updates
+## Recent Updates
 
-- ✅ Real-time rolling plots (15-second window)
-- ✅ Global system health indicator
-- ✅ Color-coded sensor status
-- ✅ Maintenance Console with authentication
-- ✅ Alarm log with low/high limits
-- ✅ Live log viewer with system events
-- ✅ Unlimited notifications - all alarms trigger webhook and desktop notifications
-- ✅ Dashboard alarm table
-- ✅ Application icon and favicon
-- ✅ Light theme
-- ✅ Multiple sensor simulator support
+- Real-time rolling plots (15-second window)
+- Global system health indicator
+- Color-coded sensor status
+- Maintenance Console with authentication
+- Alarm log with low/high limits
+- Live log viewer with system events
+- Unlimited notifications for all alarms
+- Dashboard alarm table
+- Application icon and favicon
+- Light theme
+- Multiple sensor simulator support
 
-## 🆘 Troubleshooting
+## Troubleshooting
 
 ### Common Issues
 
@@ -1115,22 +1059,22 @@ python3 scripts/test_websocket.py
 - View live logs: Maintenance Console → Live Log Viewer
 - Test individual components: Use scripts in `scripts/` directory
 
-## 📄 License
+## License
 
 This project is part of the Si-Ware Production Line Monitoring System Test.
 
-## 👥 Support
+## Support
 
 For detailed information, refer to:
 
-- `Project_Documentation.md` - Complete system documentation
+- `docs/Project_Documentation.md` - Complete system documentation
 - `Project_Documentation.pdf` - PDF version
+- `docs/SYSTEM_FLOWCHART.md` - System flowchart documentation
+- `docs/WINDOWS_COMPATIBILITY.md` - Windows compatibility guide
 - `tests/README.md` - Unit tests documentation
 - `simulators/README.md` - Sensor simulators documentation
-- `api/API_DOCUMENTATION.md` - API reference
-- `SYSTEM_FLOWCHART.md` - System flowchart documentation
 - Source code comments for implementation details
 
 ---
 
-_Last Updated: January 2025_
+_Last Updated: January 2026_

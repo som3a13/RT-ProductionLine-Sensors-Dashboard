@@ -8,7 +8,7 @@
       "unit": "\u00b0C",
       "protocol": "serial",
       "protocol_config": {
-        "port": "COM21",
+        "port": "/dev/pts/4",
         "baudrate": 115200,
         "bytesize": 8,
         "parity": "N",
@@ -23,7 +23,7 @@
       "unit": "PSI",
       "protocol": "serial",
       "protocol_config": {
-        "port": "COM23",
+        "port": "/dev/pts/5",
         "baudrate": 115200,
         "bytesize": 8,
         "parity": "N",
@@ -99,7 +99,9 @@
   "alarm_settings": {
     "enable_notifications": true,
     "enable_desktop_notifications": true,
-    "webhook_url": "http://localhost:3000/webhook"
+    "webhook_url": "http://localhost:3000/webhook",
+    "webhook_min_interval": 10.0,
+    "desktop_min_interval": 5.0
   },
   "remote_console": {
     "enabled": true,

@@ -328,13 +328,8 @@ RT-ProductionLine-Sensors-Dashboard/
 ├── requirements.txt                     # Python dependencies
 ├── fav.png                              # Application icon and favicon
 ├── README.md                            # Quick overview
-├── Project_Documentation.md             # This file (complete system documentation)
-├── Project_Documentation.pdf            # PDF version
-├── SYSTEM_FLOWCHART.md                  # System flowchart documentation
-├── SYSTEM_ARCHITECTURE.png              # System architecture diagram
-├── DATA_FLOW.png                        # Data flow diagram
-├── STARTUP_SEQUENCE.png                 # Startup sequence diagram
-├── Si-Ware_System_-_PE_Assesment_v3.pdf # Assessment document
+├── Project_Documentation.pdf            # PDF version of documentation
+└── SYSTEM_ARCHITECTURE.png              # System architecture diagram (root copy)
 │
 ├── core/                                # Core data models
 │   ├── __init__.py
@@ -366,6 +361,7 @@ RT-ProductionLine-Sensors-Dashboard/
 │
 ├── simulators/                          # Sensor simulators
 │   ├── README.md                        # Simulator documentation
+│   ├── QUICK_START.md                   # Quick start guide
 │   ├── sensor_serial.py                # Unified serial sensor simulator (PTY)
 │   ├── start_tcp_system.py             # TCP sensor system launcher
 │   ├── run_tcp_sensor_clients.py       # TCP sensor clients
@@ -389,10 +385,10 @@ RT-ProductionLine-Sensors-Dashboard/
 │   ├── read_modbus_frame.py            # Read Modbus frames
 │   ├── check_modbus_server.py          # Check Modbus server
 │   ├── check_tcp_servers.py            # Check TCP servers
-│   ├── serve_api_docs.py               # Serve API documentation
-│   ├── run_api_docs.sh                 # Run API docs script
-│   ├── generate_flowchart.py          # Generate system flowchart
-│   └── convert_md_to_pdf.py            # Convert markdown to PDF
+│   ├── start_system.py                 # Cross-platform system startup script
+│   ├── start_system_linux.sh           # Linux system startup script
+│   ├── start_system_windows.bat        # Windows system startup script
+│   └── generate_flowchart.py           # Generate system flowchart
 │
 ├── tests/                               # Unit tests
 │   ├── __init__.py
@@ -400,9 +396,20 @@ RT-ProductionLine-Sensors-Dashboard/
 │   ├── test_sensor_data.py             # Sensor data tests (32 tests)
 │   └── test_results.png                # Test execution screenshot
 │
-└── api/                                 # API documentation
-    ├── API_DOCUMENTATION.md            # Detailed API documentation
-    └── openapi.yaml                    # OpenAPI 3.0 specification
+├── docs/                                # Documentation
+│   ├── Project_Documentation.md         # Complete system documentation (this file)
+│   ├── SYSTEM_FLOWCHART.md              # System flowchart documentation
+│   ├── WINDOWS_COMPATIBILITY.md        # Windows compatibility guide
+│   ├── SYSTEM_ARCHITECTURE.png         # System architecture diagram
+│   ├── DATA_FLOW.png                    # Data flow diagram
+│   ├── STARTUP_SEQUENCE.png             # Startup sequence diagram
+│   ├── WEBHOOK_BACKGROUND_THREAD.png   # Webhook thread flowchart
+│   └── Si-Ware_System_-_PE_Assesment_v3.pdf # Assessment document
+│
+└── com0com/                             # Windows COM port virtualization
+    ├── com0com-3.0.0.0-i386-and-x64-signed.zip # com0com installer
+    ├── install_com0com_simple.bat       # Simple installation script
+    └── install_com0com.ps1              # PowerShell installation script
 ```
 
 ---
@@ -1713,46 +1720,24 @@ python3 scripts/read_modbus_frame.py
 
 ### API Documentation
 
-The Si-Ware system provides comprehensive API documentation in multiple formats:
+The Si-Ware system provides comprehensive API documentation in the following sections:
 
-1. **OpenAPI 3.0 Specification** (`api/openapi.yaml`)
-
-   - Complete OpenAPI/Swagger specification
-   - Machine-readable API definition
-   - Compatible with Swagger UI, ReDoc, and code generation tools
-
-2. **Markdown Documentation** (`api/API_DOCUMENTATION.md`)
-
-   - Human-readable API documentation
-   - Detailed endpoint descriptions
+1. **Remote Console WebSocket API** (see below)
+   - Complete WebSocket API documentation
+   - Authentication and command reference
    - Request/response examples
-   - Code samples in Python and JavaScript
 
-3. **Interactive Swagger UI**
-   - Visual API explorer
-   - Test endpoints directly from browser
-   - Available at `http://localhost:8081/` when running `scripts/serve_api_docs.py`
+2. **SensorManager API** (see below)
+   - Sensor management methods
+   - Connection handling
+   - Configuration examples
 
-#### Viewing API Documentation
+3. **SensorConfig API** (see below)
+   - Alarm detection methods
+   - Status determination
+   - Configuration options
 
-**Option 1: Swagger UI (Recommended)**
-
-```bash
-python3 scripts/serve_api_docs.py
-```
-
-Then open: `http://localhost:8081/`
-
-**Option 2: Online Swagger Editor**
-
-1. Open https://editor.swagger.io/
-2. Load `api/openapi.yaml`
-
-**Option 3: Markdown Documentation**
-
-```bash
-cat api/API_DOCUMENTATION.md
-```
+The complete API reference is documented in this file and in the README.md file.
 
 ### Remote Console WebSocket API
 
@@ -1805,9 +1790,9 @@ All connections require authentication:
 
 For complete API documentation, see:
 
-- `api/API_DOCUMENTATION.md` - Detailed markdown documentation
-- `api/openapi.yaml` - OpenAPI specification
-- Run `python3 scripts/serve_api_docs.py` for interactive Swagger UI
+- **Remote Console WebSocket API** section above in this document
+- **SensorManager API** section below in this document
+- **README.md** - API Documentation section for WebSocket API reference
 
 ### SensorManager API
 
@@ -2014,14 +1999,13 @@ python3 scripts/test_webhook.py
 
 ### Documentation Files
 
-- `README.md` - Quick overview
+- `README.md` - Quick overview and quick start guide
 - `Project_Documentation.md` - Complete system documentation (this file)
 - `Project_Documentation.pdf` - PDF version
-- `README.md` - Quick start guide
+- `docs/SYSTEM_FLOWCHART.md` - System flowchart documentation
+- `docs/WINDOWS_COMPATIBILITY.md` - Windows compatibility guide
 - `tests/README.md` - Unit tests documentation
 - `simulators/README.md` - Sensor simulators documentation
-- `api/API_DOCUMENTATION.md` - API reference
-- `SYSTEM_FLOWCHART.md` - System flowchart documentation
 
 ### Scripts
 
