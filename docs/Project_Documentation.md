@@ -1,5 +1,7 @@
 # Real-Time Production Line Sensor Dashboard with Remote Access & Notifications  Project Documentation
 
+<div class="author-line">Author: Eng. Mohammed Ismail</div>
+
 ## Table of Contents
 
 1. [Project Overview](#project-overview)

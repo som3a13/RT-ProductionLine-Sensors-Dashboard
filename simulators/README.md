@@ -163,7 +163,9 @@ Each sensor simulator prints connection information when started. Update `config
 - ✅ **Standalone** - Each sensor runs independently
 - ✅ **Clean structure** - No unnecessary files
 
+---
 
+## Credits
 
-
+**Author:** Eng. Mohammed Ismail
 

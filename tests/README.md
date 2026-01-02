@@ -328,5 +328,9 @@ When adding new functionality, add corresponding tests:
 
 ---
 
+## Credits
+
+**Author:** Eng. Mohammed Ismail
+
 *Last Updated: January 2025*
 

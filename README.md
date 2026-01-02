@@ -1077,4 +1077,8 @@ For detailed information, refer to:
 
 ---
 
+## Credits
+
+**Author:** Eng. Mohammed Ismail
+
 _Last Updated: January 2026_
