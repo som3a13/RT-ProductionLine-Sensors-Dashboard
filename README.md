@@ -121,16 +121,19 @@ Your `config/config.json` should have sensors configured like this (matching the
 Use the headless startup script that automatically starts all simulators and updates `config.json`:
 
 **Linux:**
+
 ```bash
 ./scripts/start_system_linux.sh
 ```
 
 **Windows:**
+
 ```cmd
 scripts\start_system_windows.bat
 ```
 
 **Or use the Python script directly (Cross-platform):**
+
 ```bash
 # Linux
 python3 ./scripts/start_system.py \
@@ -174,6 +177,7 @@ python scripts\start_system.py ^
 - Handle Ctrl+C to stop all processes gracefully
 
 **Windows COM Port Notes:**
+
 - For virtual COM ports, install com0com first using `install_com0com_simple.bat`
 - Adjust COM port numbers (COM20, COM22) in the commands based on your available ports
 - The script automatically handles COM port pairing (simulator port → paired port in config)
@@ -258,7 +262,8 @@ python3 main.py
 4. Start main application: `python3 main.py`
 5. Click "Connect" button in GUI
 
-**Note:** 
+**Note:**
+
 - **Linux**: Use `python3` command
 - **Windows**: Use `python` command (or `python3` if available)
 - Make sure Python 3.8+ is installed
@@ -828,11 +833,11 @@ PDU (Protocol Data Unit):
 
 ### Protocol Comparison
 
-| Protocol         | Frame Format        | Termination    | Encoding            | Worker Threads           |
-| ---------------- | ------------------- | -------------- | ------------------- | ------------------------ |
-| **Serial (PTY)** | JSON                | Newline (`\n`) | Text                | One per unique port      |
-| **TCP/IP**       | JSON                | Newline (`\n`) | Text                | One per unique host:port |
-| **Modbus/TCP**   | Binary (MBAP + PDU) | TCP packet     | 16-bit integer × 10 | One per unique host:port |
+| Protocol               | Frame Format        | Termination      | Encoding             | Worker Threads           |
+| ---------------------- | ------------------- | ---------------- | -------------------- | ------------------------ |
+| **Serial (PTY)** | JSON                | Newline (`\n`) | Text                 | One per unique port      |
+| **TCP/IP**       | JSON                | Newline (`\n`) | Text                 | One per unique host:port |
+| **Modbus/TCP**   | Binary (MBAP + PDU) | TCP packet       | 16-bit integer × 10 | One per unique host:port |
 
 ### Common Features
 
@@ -874,7 +879,6 @@ All connections require authentication before accessing commands:
      "command": "get_status"
    }
    ```
-
 2. **`get_sensors`** - Get all sensor readings
 
    ```json
@@ -883,7 +887,6 @@ All connections require authentication before accessing commands:
      "command": "get_sensors"
    }
    ```
-
 3. **`get_alarms`** - Get alarm log entries (includes low_limit and high_limit)
 
    ```json
@@ -893,7 +896,6 @@ All connections require authentication before accessing commands:
      "limit": 100
    }
    ```
-
 4. **`clear_alarms`** - Clear alarm log (requires `write` permission)
 
    ```json
@@ -902,7 +904,6 @@ All connections require authentication before accessing commands:
      "command": "clear_alarms"
    }
    ```
-
 5. **`get_logs`** - Get system log entries
 
    ```json
@@ -912,7 +913,6 @@ All connections require authentication before accessing commands:
      "limit": 50
    }
    ```
-
 6. **`run_self_test`** - Run system diagnostics (requires `commands` permission)
 
    ```json
@@ -921,7 +921,6 @@ All connections require authentication before accessing commands:
      "command": "run_self_test"
    }
    ```
-
 7. **`get_snapshot`** - Get detailed system snapshot
 
    ```json
@@ -930,8 +929,8 @@ All connections require authentication before accessing commands:
      "command": "get_snapshot"
    }
    ```
-
 8. **`set_limit`** - Set alarm limits for a sensor (requires `write` permission)
+
    ```json
    {
      "type": "command",
@@ -1074,6 +1073,7 @@ For detailed information, refer to:
 - `tests/README.md` - Unit tests documentation
 - `simulators/README.md` - Sensor simulators documentation
 - Source code comments for implementation details
+- Demo video LInk : https://drive.google.com/file/d/1EJSuo7qjnIVat7X1gCcnNLpIdK1Cr_cs/view
 
 ---
 
